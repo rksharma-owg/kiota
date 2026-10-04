@@ -3,7 +3,7 @@ name: integration-tests
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [codex/kiota-6778-preflight]
   pull_request:
   merge_group:
 
@@ -17,6 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 930dcfb784cc1ec7a93aa8941ee53411f2f6eb76
+      - name: Verify exact contribution commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "930dcfb784cc1ec7a93aa8941ee53411f2f6eb76"
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -52,6 +57,11 @@ jobs:
           - "https://github.com/microsoftgraph/msgraph-metadata/raw/refs/heads/master/openapi/beta/openapi.yaml"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 930dcfb784cc1ec7a93aa8941ee53411f2f6eb76
+      - name: Verify exact contribution commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "930dcfb784cc1ec7a93aa8941ee53411f2f6eb76"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: generator
@@ -110,6 +120,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 930dcfb784cc1ec7a93aa8941ee53411f2f6eb76
+      - name: Verify exact contribution commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "930dcfb784cc1ec7a93aa8941ee53411f2f6eb76"
       - id: replace_url
         run: ./it/get-description-artifact-key.ps1 -descriptionUrl ${{ matrix.description }}
         shell: pwsh

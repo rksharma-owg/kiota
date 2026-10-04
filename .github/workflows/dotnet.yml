@@ -3,7 +3,7 @@ name: .NET
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [codex/kiota-6778-preflight]
   pull_request:
   merge_group:
 
@@ -18,7 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: 930dcfb784cc1ec7a93aa8941ee53411f2f6eb76
+      - name: Verify exact contribution commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "930dcfb784cc1ec7a93aa8941ee53411f2f6eb76"
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -69,6 +72,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 930dcfb784cc1ec7a93aa8941ee53411f2f6eb76
+      - name: Verify exact contribution commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "930dcfb784cc1ec7a93aa8941ee53411f2f6eb76"
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
