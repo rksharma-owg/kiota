@@ -3,7 +3,7 @@ name: .NET
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [codex/kiota-7319-preflight]
   pull_request:
   merge_group:
 
@@ -18,7 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: 88486e1a6de5573db398a0509210a6842477903f
+      - name: Verify exact contribution commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "88486e1a6de5573db398a0509210a6842477903f"
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -69,12 +72,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 88486e1a6de5573db398a0509210a6842477903f
+      - name: Verify exact contribution commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "88486e1a6de5573db398a0509210a6842477903f"
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
       - name: Restore dependencies
         run: dotnet restore kiota.slnx
+      - name: Test relative reference resolution on ${{ matrix.os }}
+        run: dotnet test --project tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj --filter "FullyQualifiedName~OpenApiDocumentDownloadServiceTests"
       - name: Publish ${{ matrix.os }}
         run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -o ./${{ matrix.os }} -f net10.0
 

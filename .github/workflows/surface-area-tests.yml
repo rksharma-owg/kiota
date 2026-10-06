@@ -8,7 +8,7 @@ on:
         required: false
         default: ""
   push:
-    branches: [main]
+    branches: [codex/kiota-7319-preflight]
   pull_request:
   merge_group:
 
@@ -27,6 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 88486e1a6de5573db398a0509210a6842477903f
+      - name: Verify exact contribution commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "88486e1a6de5573db398a0509210a6842477903f"
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -53,6 +58,11 @@ jobs:
           - "https://github.com/microsoftgraph/msgraph-metadata/raw/refs/heads/master/openapi/beta/openapi.yaml"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 88486e1a6de5573db398a0509210a6842477903f
+      - name: Verify exact contribution commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "88486e1a6de5573db398a0509210a6842477903f"
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
