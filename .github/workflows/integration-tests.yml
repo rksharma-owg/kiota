@@ -18,10 +18,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 88486e1a6de5573db398a0509210a6842477903f
+          ref: 7b5b3af46f9b18dfe7fa3a14e1377ff2f2fb554b
       - name: Verify exact contribution commit
         shell: bash
-        run: test "$(git rev-parse HEAD)" = "88486e1a6de5573db398a0509210a6842477903f"
+        run: test "$(git rev-parse HEAD)" = "7b5b3af46f9b18dfe7fa3a14e1377ff2f2fb554b"
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -58,10 +58,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 88486e1a6de5573db398a0509210a6842477903f
+          ref: 7b5b3af46f9b18dfe7fa3a14e1377ff2f2fb554b
       - name: Verify exact contribution commit
         shell: bash
-        run: test "$(git rev-parse HEAD)" = "88486e1a6de5573db398a0509210a6842477903f"
+        run: test "$(git rev-parse HEAD)" = "7b5b3af46f9b18dfe7fa3a14e1377ff2f2fb554b"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: generator
@@ -121,10 +121,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 88486e1a6de5573db398a0509210a6842477903f
+          ref: 7b5b3af46f9b18dfe7fa3a14e1377ff2f2fb554b
       - name: Verify exact contribution commit
         shell: bash
-        run: test "$(git rev-parse HEAD)" = "88486e1a6de5573db398a0509210a6842477903f"
+        run: test "$(git rev-parse HEAD)" = "7b5b3af46f9b18dfe7fa3a14e1377ff2f2fb554b"
       - id: replace_url
         run: ./it/get-description-artifact-key.ps1 -descriptionUrl ${{ matrix.description }}
         shell: pwsh
