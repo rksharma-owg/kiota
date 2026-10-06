@@ -132,18 +132,15 @@ internal partial class OpenApiDocumentDownloadService
 
         try
         {
-            var rawUri = config.OpenAPIFilePath.TrimEnd(KiotaBuilder.ForwardSlash);
-            var lastSlashIndex = rawUri.LastIndexOf(KiotaBuilder.ForwardSlash);
-            if (lastSlashIndex < 0)
-                lastSlashIndex = rawUri.Length - 1;
-            var documentUri = new Uri(rawUri[..lastSlashIndex]);
-            settings.BaseUrl = documentUri;
+            settings.BaseUrl = Uri.TryCreate(config.OpenAPIFilePath, UriKind.Absolute, out var documentUri) ?
+                documentUri :
+                new Uri(Path.GetFullPath(config.OpenAPIFilePath));
         }
 #pragma warning disable CA1031
         catch
 #pragma warning restore CA1031
         {
-            // couldn't parse the URL, it's probably a local file
+            // Couldn't determine the document URI.
         }
 
         ReadResult readResult;

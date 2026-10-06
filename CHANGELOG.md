@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Resolve relative external references from the OpenAPI document location for local files and remote URLs. Fixes [#7319](https://github.com/microsoft/kiota/issues/7319).
 - Fixed a stack overflow when generating API plugins from descriptions with cyclic `allOf` schemas.
 - Go: keep escaped namespace segments lowercase so imports match generated package directories on case-sensitive filesystems. Fixes [#7828](https://github.com/microsoft/kiota/issues/7828).
 - Go: cast scalar enum values in union factories and avoid reading an empty discriminator name for undiscriminated unions. Addresses [#7808](https://github.com/microsoft/kiota/issues/7808).

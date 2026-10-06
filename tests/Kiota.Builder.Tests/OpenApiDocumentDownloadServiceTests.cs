@@ -389,6 +389,125 @@ paths: {}
         Assert.Equal(largeDescription, document.Info?.Description);
     }
 
+    [Theory]
+    [InlineData("absolute", "pet.yaml")]
+    [InlineData("relative", "pet.yaml")]
+    [InlineData("uri", "pet.yaml")]
+    [InlineData("absolute", "schemas/pet.yaml")]
+    [InlineData("relative", "schemas/pet.yaml")]
+    [InlineData("uri", "schemas/pet.yaml")]
+    public async Task ResolvesLocalReferencesRelativeToDocument(string pathKind, string referencePath)
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName(), "specification with spaces");
+        var documentPath = Path.Combine(tempDirectory, "openapi.yaml");
+        var schemaPath = Path.Combine(tempDirectory, referencePath.Replace('/', Path.DirectorySeparatorChar));
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(schemaPath)!);
+            await File.WriteAllTextAsync(schemaPath, ExternalPetDocument, TestContext.Current.CancellationToken);
+            var generationConfig = new GenerationConfiguration
+            {
+                OpenAPIFilePath = pathKind switch
+                {
+                    "relative" => Path.GetRelativePath(Directory.GetCurrentDirectory(), documentPath),
+                    "uri" => new Uri(documentPath).AbsoluteUri,
+                    _ => documentPath,
+                },
+                AllowedExternalOrigins = [schemaPath],
+            };
+            using var inputDocumentStream = CreateMemoryStreamFromString(CreateDocumentWithExternalReference($"./{referencePath}"));
+            var service = new OpenApiDocumentDownloadService(_httpClient, new FakeLogger<OpenApiDocumentDownloadService>());
+
+            var document = await service.GetDocumentFromStreamAsync(inputDocumentStream, generationConfig, cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(JsonSchemaType.String, document?.Paths["/pets"].Operations?[HttpMethod.Get].Responses?["200"].Content?["application/json"].Schema?.Properties?["name"].Type);
+        }
+        finally
+        {
+            if (Directory.Exists(Path.GetDirectoryName(tempDirectory)))
+                Directory.Delete(Path.GetDirectoryName(tempDirectory)!, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("https://example.com/specs/openapi.yaml", "pet.yaml", "https://example.com/specs/pet.yaml")]
+    [InlineData("https://example.com/specs/openapi.yaml?version=1", "schemas/pet.yaml", "https://example.com/specs/schemas/pet.yaml")]
+    [InlineData("https://example.com/specs/openapi.yaml", "../pet.yaml", "https://example.com/pet.yaml")]
+    public async Task ResolvesRemoteReferencesRelativeToDocument(string documentPath, string referencePath, string expectedUri)
+    {
+        var generationConfig = new GenerationConfiguration
+        {
+            OpenAPIFilePath = documentPath,
+            AllowedExternalOrigins = [expectedUri],
+        };
+        using var httpClient = new HttpClient(new RelativeReferenceResponseHandler(expectedUri));
+        using var inputDocumentStream = CreateMemoryStreamFromString(CreateDocumentWithExternalReference(referencePath));
+        var service = new OpenApiDocumentDownloadService(httpClient, new FakeLogger<OpenApiDocumentDownloadService>());
+
+        var document = await service.GetDocumentFromStreamAsync(inputDocumentStream, generationConfig, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(JsonSchemaType.String, document?.Paths["/pets"].Operations?[HttpMethod.Get].Responses?["200"].Content?["application/json"].Schema?.Properties?["name"].Type);
+    }
+
+    [Fact]
+    public async Task RelativeReferencesStillRequireAllowedExternalOrigins()
+    {
+        var generationConfig = new GenerationConfiguration
+        {
+            OpenAPIFilePath = "https://example.com/specs/openapi.yaml",
+            AllowedExternalOrigins = ["https://example.com/specs/allowed.yaml"],
+        };
+        using var inputDocumentStream = CreateMemoryStreamFromString(CreateDocumentWithExternalReference("pet.yaml"));
+        var service = new OpenApiDocumentDownloadService(_httpClient, new FakeLogger<OpenApiDocumentDownloadService>());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.GetDocumentFromStreamAsync(inputDocumentStream, generationConfig, cancellationToken: TestContext.Current.CancellationToken));
+    }
+
+    private static string CreateDocumentWithExternalReference(string referencePath) => $$"""
+openapi: 3.0.0
+info:
+  title: Relative references
+  version: 1.0.0
+paths:
+  /pets:
+    get:
+      responses:
+        '200':
+          description: A pet
+          content:
+            application/json:
+              schema:
+                $ref: '{{referencePath}}#/components/schemas/Pet'
+""";
+
+    private const string ExternalPetDocument = """
+openapi: 3.0.0
+info:
+  title: Pet components
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        name:
+          type: string
+""";
+
+    private sealed class RelativeReferenceResponseHandler(string expectedUri) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal(expectedUri, request.RequestUri?.AbsoluteUri);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(ExternalPetDocument),
+            });
+        }
+    }
+
     private static Stream CreateMemoryStreamFromString(string s)
     {
         var stream = new MemoryStream();
