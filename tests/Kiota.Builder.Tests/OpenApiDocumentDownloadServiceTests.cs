@@ -398,35 +398,26 @@ paths: {}
     [InlineData("uri", "schemas/pet.yaml")]
     public async Task ResolvesLocalReferencesRelativeToDocument(string pathKind, string referencePath)
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName(), "specification with spaces");
-        var documentPath = Path.Combine(tempDirectory, "openapi.yaml");
-        var schemaPath = Path.Combine(tempDirectory, referencePath.Replace('/', Path.DirectorySeparatorChar));
-        try
+        var fixtureDirectory = Path.Combine(AppContext.BaseDirectory, "TestData", "specification with spaces");
+        var documentDirectory = referencePath.StartsWith("schemas/", StringComparison.Ordinal) ? fixtureDirectory : Path.Combine(fixtureDirectory, "schemas");
+        var documentPath = Path.Combine(documentDirectory, "openapi.yaml");
+        var schemaPath = Path.Combine(fixtureDirectory, "schemas", "pet.yaml");
+        var generationConfig = new GenerationConfiguration
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(schemaPath)!);
-            await File.WriteAllTextAsync(schemaPath, ExternalPetDocument, TestContext.Current.CancellationToken);
-            var generationConfig = new GenerationConfiguration
+            OpenAPIFilePath = pathKind switch
             {
-                OpenAPIFilePath = pathKind switch
-                {
-                    "relative" => Path.GetRelativePath(Directory.GetCurrentDirectory(), documentPath),
-                    "uri" => new Uri(documentPath).AbsoluteUri,
-                    _ => documentPath,
-                },
-                AllowedExternalOrigins = [schemaPath],
-            };
-            using var inputDocumentStream = CreateMemoryStreamFromString(CreateDocumentWithExternalReference($"./{referencePath}"));
-            var service = new OpenApiDocumentDownloadService(_httpClient, new FakeLogger<OpenApiDocumentDownloadService>());
+                "relative" => Path.GetRelativePath(Directory.GetCurrentDirectory(), documentPath),
+                "uri" => new Uri(documentPath).AbsoluteUri,
+                _ => documentPath,
+            },
+            AllowedExternalOrigins = [schemaPath],
+        };
+        using var inputDocumentStream = CreateMemoryStreamFromString(CreateDocumentWithExternalReference($"./{referencePath}"));
+        var service = new OpenApiDocumentDownloadService(_httpClient, new FakeLogger<OpenApiDocumentDownloadService>());
 
-            var document = await service.GetDocumentFromStreamAsync(inputDocumentStream, generationConfig, cancellationToken: TestContext.Current.CancellationToken);
+        var document = await service.GetDocumentFromStreamAsync(inputDocumentStream, generationConfig, cancellationToken: TestContext.Current.CancellationToken);
 
-            Assert.Equal(JsonSchemaType.String, document?.Paths["/pets"].Operations?[HttpMethod.Get].Responses?["200"].Content?["application/json"].Schema?.Properties?["name"].Type);
-        }
-        finally
-        {
-            if (Directory.Exists(Path.GetDirectoryName(tempDirectory)))
-                Directory.Delete(Path.GetDirectoryName(tempDirectory)!, true);
-        }
+        Assert.Equal(JsonSchemaType.String, document?.Paths["/pets"].Operations?[HttpMethod.Get].Responses?["200"].Content?["application/json"].Schema?.Properties?["name"].Type);
     }
 
     [Theory]
