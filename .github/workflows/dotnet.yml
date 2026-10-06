@@ -3,7 +3,7 @@ name: .NET
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [codex/kiota-8323-review-preflight]
   pull_request:
   merge_group:
 
@@ -18,7 +18,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: eeb4e7fb09c352214016fe86de29c7e8e69967ae
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact contribution and target commit
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "eeb4e7fb09c352214016fe86de29c7e8e69967ae"
+          git merge-base --is-ancestor daa4ea9e402a7d5eccbbd04b2b3c749815dbb491 HEAD
+          git rev-parse HEAD
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -69,12 +77,24 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: eeb4e7fb09c352214016fe86de29c7e8e69967ae
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact contribution and target commit
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "eeb4e7fb09c352214016fe86de29c7e8e69967ae"
+          git merge-base --is-ancestor daa4ea9e402a7d5eccbbd04b2b3c749815dbb491 HEAD
+          git rev-parse HEAD
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
       - name: Restore dependencies
         run: dotnet restore kiota.slnx
+      - name: Test inherited union properties on ${{ matrix.os }}
+        run: dotnet test --project tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj --filter "FullyQualifiedName~SingleUnionPreservesInheritedPropertiesAsync"
       - name: Publish ${{ matrix.os }}
         run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -o ./${{ matrix.os }} -f net10.0
 

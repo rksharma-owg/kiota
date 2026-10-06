@@ -13,8 +13,9 @@ name: "CodeQL"
 
 on:
   workflow_dispatch:
+  workflow_dispatch:
   push:
-    branches: [main]
+    branches: [codex/kiota-8323-review-preflight]
     paths-ignore:
       [
         "abstractions/**",
@@ -62,6 +63,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: eeb4e7fb09c352214016fe86de29c7e8e69967ae
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact contribution and target commit
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "eeb4e7fb09c352214016fe86de29c7e8e69967ae"
+          git merge-base --is-ancestor daa4ea9e402a7d5eccbbd04b2b3c749815dbb491 HEAD
+          git rev-parse HEAD
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
