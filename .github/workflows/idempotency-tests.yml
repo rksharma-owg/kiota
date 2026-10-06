@@ -1,36 +1,38 @@
 name: idempotency-tests
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-  pull_request:
-  merge_group:
-
 concurrency:
-  # Only run once for latest commit per ref and cancel other (previous) runs.
   group: ci-idempotency-tests-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-      - name: Restore dependencies
-        run: dotnet restore kiota.slnx
-      - name: Build
-        run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -p:PublishReadyToRun=true -o ./publish -f net10.0
-        # -p:PublishTrimmed=true -p:PublishAot=true should be enabled to make test run faster, but there are still limitations
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: generator
-          path: publish
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 31d066607e100b74025d503be3ef86b9a2ff6ba9
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify exact contribution and target commit
+      shell: bash
+      run: 'test "$(git rev-parse HEAD)" = "31d066607e100b74025d503be3ef86b9a2ff6ba9"
 
+        git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
+
+        git rev-parse HEAD
+
+        '
+    - name: Setup .NET
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: global.json
+    - name: Restore dependencies
+      run: dotnet restore kiota.slnx
+    - name: Build
+      run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -p:PublishReadyToRun=true -o ./publish
+        -f net10.0
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: generator
+        path: publish
   download-openapi-specs:
     runs-on: ubuntu-latest
     needs: build
@@ -38,38 +40,51 @@ jobs:
       fail-fast: false
       matrix:
         description:
-          - "oas::petstore"
-          - "https://api.twitter.com/2/openapi.json"
-          - "https://developers.notion.com/openapi.json"
-          - "https://raw.githubusercontent.com/stripe/openapi/refs/heads/master/latest/openapi.spec3.json"
-          - "https://raw.githubusercontent.com/googlemaps/openapi-specification/refs/tags/v1.22.5/dist/google-maps-platform-openapi3.yml"
-          - "https://raw.githubusercontent.com/meraki/openapi/refs/heads/master/openapi/spec3.json"
-          - "https://developers.pipedrive.com/docs/api/v1/openapi.yaml"
-          - "https://raw.githubusercontent.com/twilio/twilio-oai/refs/heads/main/spec/yaml/twilio_api_v2010.yaml"
-          - "https://raw.githubusercontent.com/docusign/OpenAPI-Specifications/refs/heads/master/esignature.rest.swagger-v2.1.json"
-          - "https://raw.githubusercontent.com/github/rest-api-description/refs/heads/main/descriptions/api.github.com/api.github.com.json"
-          - "apisguru::apis.guru"
+        - oas::petstore
+        - https://api.twitter.com/2/openapi.json
+        - https://developers.notion.com/openapi.json
+        - https://raw.githubusercontent.com/stripe/openapi/refs/heads/master/latest/openapi.spec3.json
+        - https://raw.githubusercontent.com/googlemaps/openapi-specification/refs/tags/v1.22.5/dist/google-maps-platform-openapi3.yml
+        - https://raw.githubusercontent.com/meraki/openapi/refs/heads/master/openapi/spec3.json
+        - https://developers.pipedrive.com/docs/api/v1/openapi.yaml
+        - https://raw.githubusercontent.com/twilio/twilio-oai/refs/heads/main/spec/yaml/twilio_api_v2010.yaml
+        - https://raw.githubusercontent.com/docusign/OpenAPI-Specifications/refs/heads/master/esignature.rest.swagger-v2.1.json
+        - https://raw.githubusercontent.com/github/rest-api-description/refs/heads/main/descriptions/api.github.com/api.github.com.json
+        - apisguru::apis.guru
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: generator
-          path: publish
-      - run: chmod a+x ./publish/kiota
-      - name: Download OpenAPI specs
-        run: ./it/download-openapi-specs.ps1 -descriptionUrl ${{ matrix.description }}
-        shell: pwsh
-      - id: replace_url
-        run: ./it/get-description-artifact-key.ps1 -descriptionUrl ${{ matrix.description }}
-        shell: pwsh
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: description-${{ steps.replace_url.outputs.ARTKEY }}
-          # Output is either openapi.json or openapi.yml. Try to upload the one that is found.
-          path: |
-            it/openapi.yaml
-            it/openapi.json
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 31d066607e100b74025d503be3ef86b9a2ff6ba9
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify exact contribution and target commit
+      shell: bash
+      run: 'test "$(git rev-parse HEAD)" = "31d066607e100b74025d503be3ef86b9a2ff6ba9"
 
+        git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
+
+        git rev-parse HEAD
+
+        '
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: generator
+        path: publish
+    - run: chmod a+x ./publish/kiota
+    - name: Download OpenAPI specs
+      run: ./it/download-openapi-specs.ps1 -descriptionUrl ${{ matrix.description }}
+      shell: pwsh
+    - id: replace_url
+      run: ./it/get-description-artifact-key.ps1 -descriptionUrl ${{ matrix.description }}
+      shell: pwsh
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: description-${{ steps.replace_url.outputs.ARTKEY }}
+        path: 'it/openapi.yaml
+
+          it/openapi.json
+
+          '
   idempotency:
     runs-on: ubuntu-latest
     needs: download-openapi-specs
@@ -77,78 +92,94 @@ jobs:
       fail-fast: false
       matrix:
         language:
-          - java
-          - csharp
-          - go
-          - typescript
-          - ruby
-          - php
-          - python
-          - dart
+        - java
+        - csharp
+        - go
+        - typescript
+        - ruby
+        - php
+        - python
+        - dart
         description:
-          - "./tests/Kiota.Builder.IntegrationTests/InheritingErrors.yaml"
-          - "./tests/Kiota.Builder.IntegrationTests/InheritingThreeLevels.yaml"
-          - "./tests/Kiota.Builder.IntegrationTests/NoUnderscoresInModel.yaml"
-          - "oas::petstore"
-          - "https://api.twitter.com/2/openapi.json"
-          - "https://developers.notion.com/openapi.json"
-          - "https://raw.githubusercontent.com/stripe/openapi/refs/heads/master/latest/openapi.spec3.json"
-          - "https://raw.githubusercontent.com/googlemaps/openapi-specification/refs/tags/v1.22.5/dist/google-maps-platform-openapi3.yml"
-          - "https://raw.githubusercontent.com/meraki/openapi/refs/heads/master/openapi/spec3.json"
-          - "https://developers.pipedrive.com/docs/api/v1/openapi.yaml"
-          - "https://raw.githubusercontent.com/twilio/twilio-oai/refs/heads/main/spec/yaml/twilio_api_v2010.yaml"
-          - "https://raw.githubusercontent.com/docusign/OpenAPI-Specifications/refs/heads/master/esignature.rest.swagger-v2.1.json"
-          - "https://raw.githubusercontent.com/github/rest-api-description/refs/heads/main/descriptions/api.github.com/api.github.com.json"
-          - "apisguru::apis.guru"
+        - ./tests/Kiota.Builder.IntegrationTests/InheritingErrors.yaml
+        - ./tests/Kiota.Builder.IntegrationTests/InheritingThreeLevels.yaml
+        - ./tests/Kiota.Builder.IntegrationTests/NoUnderscoresInModel.yaml
+        - oas::petstore
+        - https://api.twitter.com/2/openapi.json
+        - https://developers.notion.com/openapi.json
+        - https://raw.githubusercontent.com/stripe/openapi/refs/heads/master/latest/openapi.spec3.json
+        - https://raw.githubusercontent.com/googlemaps/openapi-specification/refs/tags/v1.22.5/dist/google-maps-platform-openapi3.yml
+        - https://raw.githubusercontent.com/meraki/openapi/refs/heads/master/openapi/spec3.json
+        - https://developers.pipedrive.com/docs/api/v1/openapi.yaml
+        - https://raw.githubusercontent.com/twilio/twilio-oai/refs/heads/main/spec/yaml/twilio_api_v2010.yaml
+        - https://raw.githubusercontent.com/docusign/OpenAPI-Specifications/refs/heads/master/esignature.rest.swagger-v2.1.json
+        - https://raw.githubusercontent.com/github/rest-api-description/refs/heads/main/descriptions/api.github.com/api.github.com.json
+        - apisguru::apis.guru
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - id: replace_url
-        run: ./it/get-description-artifact-key.ps1 -descriptionUrl ${{ matrix.description }}
-        shell: pwsh
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        if: startsWith(matrix.description, './') != true
-        with:
-          name: description-${{ steps.replace_url.outputs.ARTKEY }}
-          path: description
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: generator
-          path: publish
-      - run: chmod a+x ./publish/kiota
-      - name: Check if test is suppressed
-        id: check-suppressed
-        run: |
-          $isSuppressed = . ./it/get-is-suppressed.ps1 -descriptionUrl ${{ matrix.description }} -language ${{ matrix.language }} -kind idempotency
-          Write-Output "IS_SUPPRESSED=$($isSuppressed.ToString().ToLowerInvariant())" >> $Env:GITHUB_OUTPUT
-        shell: pwsh
-      - name: Verify idempotency
-        shell: pwsh
-        run: ./it/compare-generation.ps1 -descriptionUrl "${{ steps.replace_url.outputs.DESCRIPTION_PATH }}" -descriptionKey ${{ matrix.description }}  -language "${{ matrix.language }}"
-        continue-on-error: ${{ steps.check-suppressed.outputs.IS_SUPPRESSED == 'true' }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: idempotency-${{ matrix.language }}-${{ steps.replace_url.outputs.ARTKEY }}
-          path: idempotency-results/*.zip
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 31d066607e100b74025d503be3ef86b9a2ff6ba9
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify exact contribution and target commit
+      shell: bash
+      run: 'test "$(git rev-parse HEAD)" = "31d066607e100b74025d503be3ef86b9a2ff6ba9"
 
+        git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
+
+        git rev-parse HEAD
+
+        '
+    - id: replace_url
+      run: ./it/get-description-artifact-key.ps1 -descriptionUrl ${{ matrix.description }}
+      shell: pwsh
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      if: startsWith(matrix.description, './') != true
+      with:
+        name: description-${{ steps.replace_url.outputs.ARTKEY }}
+        path: description
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: generator
+        path: publish
+    - run: chmod a+x ./publish/kiota
+    - name: Check if test is suppressed
+      id: check-suppressed
+      run: '$isSuppressed = . ./it/get-is-suppressed.ps1 -descriptionUrl ${{ matrix.description }} -language ${{ matrix.language
+        }} -kind idempotency
+
+        Write-Output "IS_SUPPRESSED=$($isSuppressed.ToString().ToLowerInvariant())" >> $Env:GITHUB_OUTPUT
+
+        '
+      shell: pwsh
+    - name: Verify idempotency
+      shell: pwsh
+      run: ./it/compare-generation.ps1 -descriptionUrl "${{ steps.replace_url.outputs.DESCRIPTION_PATH }}" -descriptionKey
+        ${{ matrix.description }}  -language "${{ matrix.language }}"
+      continue-on-error: ${{ steps.check-suppressed.outputs.IS_SUPPRESSED == 'true' }}
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      if: always()
+      with:
+        name: idempotency-${{ matrix.language }}-${{ steps.replace_url.outputs.ARTKEY }}
+        path: idempotency-results/*.zip
   cleanup:
     runs-on: ubuntu-latest
     needs: idempotency
     steps:
-      - uses: jimschubert/delete-artifacts-action@f5cb1978980f2e189a2b3484d430f8810860ba38 # v1.0.4
-        with:
-          artifact_name: "generator"
-          min_bytes: "0"
-
-  # Aggregates result of the idempotency tests for use in branch policy
+    - uses: jimschubert/delete-artifacts-action@f5cb1978980f2e189a2b3484d430f8810860ba38
+      with:
+        artifact_name: generator
+        min_bytes: '0'
   check-idempotency-tests:
     runs-on: ubuntu-latest
     needs: idempotency
     if: always()
     steps:
-      - name: All build matrix options are successful
-        if: ${{ !(contains(needs.*.result, 'failure')) }}
-        run: exit 0
-      - name: One or more build matrix options failed
-        if: ${{ contains(needs.*.result, 'failure') }}
-        run: exit 1
+    - name: All build matrix options are successful
+      if: ${{ !(contains(needs.*.result, 'failure')) }}
+      run: exit 0
+    - name: One or more build matrix options failed
+      if: ${{ contains(needs.*.result, 'failure') }}
+      run: exit 1
+'on':
+  workflow_dispatch: null
