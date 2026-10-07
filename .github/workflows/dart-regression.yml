@@ -1,0 +1,74 @@
+name: Dart import regression
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+          persist-credentials: false
+      - name: Verify contribution SHA
+        run: test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 9af1cce7e4475dff80bb8d7f48859e9dedbbccef
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d
+        with:
+          sdk: stable
+      - name: Generate baseline and patch clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C harness rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C baseline rev-parse HEAD)" = "9af1cce7e4475dff80bb8d7f48859e9dedbbccef"
+          dotnet build src/kiota/kiota.csproj -f net10.0
+          dotnet build baseline/src/kiota/kiota.csproj -f net10.0
+          for output in baseline-client patch-client; do
+            mkdir -p "$output/lib"
+            cp it/dart/pubspec.yaml it/dart/analysis_options.yaml "$output/"
+          done
+          dotnet baseline/src/kiota/bin/Debug/net10.0/kiota.dll generate -l Dart -d harness/.preflight/dart-inline-items.json -o baseline-client/lib --co --ebc
+          dotnet src/kiota/bin/Debug/net10.0/kiota.dll generate -l Dart -d harness/.preflight/dart-inline-items.json -o patch-client/lib --co --ebc
+      - name: Verify baseline compiler failure and patch compiler success
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart --version
+          cd baseline-client
+          dart pub get
+          if dart analyze lib/ > ../baseline-analyze.log 2>&1; then
+            cat ../baseline-analyze.log
+            echo 'Expected the baseline missing import to fail analysis'
+            exit 1
+          fi
+          cat ../baseline-analyze.log
+          grep -F 'uri_does_not_exist' ../baseline-analyze.log
+          cd ../patch-client
+          cp ../baseline-client/pubspec.lock .
+          dart pub get --enforce-lockfile
+          dart analyze lib/
+          cd ..
+          diff -ru baseline-client/lib patch-client/lib > source.diff || test "$?" = 1
+          cat source.diff
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: dart-regression-evidence
+          path: |
+            baseline-analyze.log
+            source.diff
+            patch-client/pubspec.lock

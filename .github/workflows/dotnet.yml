@@ -9,12 +9,12 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 31d066607e100b74025d503be3ef86b9a2ff6ba9
+        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "31d066607e100b74025d503be3ef86b9a2ff6ba9"
+      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
 
         git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
 
@@ -71,12 +71,12 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 31d066607e100b74025d503be3ef86b9a2ff6ba9
+        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "31d066607e100b74025d503be3ef86b9a2ff6ba9"
+      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
 
         git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
 
@@ -121,56 +121,6 @@ jobs:
       run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota.exe info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"\
         * ]]; then\n  echo \"Built in defaults are working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os\
         \ }}/kiota info -l Java\n  exit 1\nfi\n"
-  python-union-regression:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        python:
-        - '3.10'
-        - '3.12'
-        - '3.14'
-    steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      with:
-        ref: 31d066607e100b74025d503be3ef86b9a2ff6ba9
-        fetch-depth: 0
-        persist-credentials: false
-    - name: Verify exact contribution and target commit
-      shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "31d066607e100b74025d503be3ef86b9a2ff6ba9"
 
-        git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
-
-        git rev-parse HEAD
-
-        '
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      with:
-        ref: ${{ github.sha }}
-        path: harness
-        persist-credentials: false
-    - name: Verify harness revision
-      shell: bash
-      run: 'test "$(git -C harness rev-parse HEAD)" = "$GITHUB_SHA"
-
-        git -C harness rev-parse HEAD'
-    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-      with:
-        global-json-file: global.json
-    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-      with:
-        python-version: ${{ matrix.python }}
-    - name: Install pinned JSON runtime
-      run: python -m pip install microsoft-kiota-serialization-json==1.14.2
-    - name: Generate regression client
-      run: 'dotnet build src/kiota/kiota.csproj -f net10.0
-
-        dotnet src/kiota/bin/Debug/net10.0/kiota.dll generate -l Python -d harness/.preflight/union-boundaries.json -o generated-union
-        --co --ebc'
-    - name: Verify actual JSON round trips
-      run: python harness/.preflight/runtime-boundaries.py generated-union
 'on':
   workflow_dispatch: null

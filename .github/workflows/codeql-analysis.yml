@@ -16,12 +16,12 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 31d066607e100b74025d503be3ef86b9a2ff6ba9
+        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "31d066607e100b74025d503be3ef86b9a2ff6ba9"
+      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
 
         git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
 
