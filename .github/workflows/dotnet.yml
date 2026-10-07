@@ -219,6 +219,173 @@ jobs:
         name: race-regression-${{ matrix.os }}
         path: baseline-regression.log
     if: ${{ inputs.prNumber == '8347' }}
+  vscode-test_and_generate_binaries:
+    strategy:
+      fail-fast: false
+      matrix:
+        binaries:
+        - architecture: win-x64
+          os: windows-latest
+        - architecture: win-arm64
+          os: windows-11-arm
+        - architecture: linux-x64
+          os: ubuntu-latest
+        - architecture: linux-arm64
+          os: ubuntu-24.04-arm
+        - architecture: osx-arm64
+          os: macOS-latest
+    runs-on: ${{ matrix.binaries.os }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.contributionSha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify exact contribution and target commit
+      shell: bash
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
+
+        git merge-base --is-ancestor ${{ inputs.targetSha }} HEAD
+
+        git rev-parse HEAD
+
+        '
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      with:
+        node-version: 24.x
+    - name: Use .NET SDK from global.json
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: global.json
+    - id: last_release
+      run: '$releaseVersion = gh release list --repo microsoft/kiota --exclude-drafts --exclude-pre-releases --json tagName,isLatest | ConvertFrom-Json | ? {$_.isLatest
+        -eq $true} | select -first 1 -ExpandProperty tagName
+
+        $releaseVersion = "$releaseVersion" -replace ''^v'', ''''
+
+        Write-Output "RELEASE_VERSION=$releaseVersion" >> $Env:GITHUB_OUTPUT
+
+        '
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - run: scripts/update-vscode-releases.ps1 -version "v${{ steps.last_release.outputs.RELEASE_VERSION }}" -packageJsonFilePath "./vscode/packages/microsoft-kiota/package.json"
+        -runtimeFilePath "./vscode/packages/npm-package/lib/runtime.json" -online
+      shell: pwsh
+    - name: Install dependencies
+      run: npm ci
+      working-directory: vscode
+    - name: Publish kiota for testing - ${{ matrix.binaries.os }} - ${{ matrix.binaries.architecture }}
+      run: 'dotnet publish src/kiota/kiota.csproj -c Release --runtime ${{ matrix.binaries.architecture }} -p:PublishSingleFile=true --self-contained --output vscode/packages/npm-package/.kiotabin/${{
+        steps.last_release.outputs.RELEASE_VERSION }}/${{ matrix.binaries.architecture }} -f net10.0
+
+        '
+      shell: pwsh
+    - name: Lint
+      run: npm run lint
+      working-directory: vscode
+    - name: Run tests - package
+      run: "if [[ \"${{ matrix.binaries.os }}\" == \"ubuntu-latest\" ]]; then\n  xvfb-run -a npm run test:package:coverage\nelse\n  npm run test:package:coverage\n\
+        fi\n"
+      shell: bash
+      working-directory: vscode
+    - name: Run tests - vscode
+      run: "if [[ \"${{ matrix.binaries.os }}\" == \"ubuntu-latest\" ]]; then\n  xvfb-run -a npm run test:vscode:coverage\nelse\n  npm run test:vscode:coverage\n\
+        fi\n"
+      shell: bash
+      working-directory: vscode
+    - name: Upload artifact
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.binaries.architecture }}
+        path: vscode/packages/npm-package/.kiotabin/${{ steps.last_release.outputs.RELEASE_VERSION }}/${{ matrix.binaries.architecture }}
+        retention-days: 3
+  vscode-build:
+    needs:
+    - vscode-test_and_generate_binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        builds:
+        - name: VS Code Extension
+          path: microsoft-kiota
+          id: vscode
+          item: vsix
+        - name: Npm Package
+          path: npm-package
+          id: package
+          item: tgz
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.contributionSha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify exact contribution and target commit
+      shell: bash
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
+
+        git merge-base --is-ancestor ${{ inputs.targetSha }} HEAD
+
+        git rev-parse HEAD
+
+        '
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      with:
+        node-version: 24.x
+    - id: last_release
+      run: '$releaseVersion = gh release list --repo microsoft/kiota --exclude-drafts --exclude-pre-releases --json tagName,isLatest | ConvertFrom-Json | ? {$_.isLatest
+        -eq $true} | select -first 1 -ExpandProperty tagName
+
+        Write-Output "RELEASE_VERSION=$releaseVersion" >> $Env:GITHUB_OUTPUT
+
+        '
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - run: scripts/update-vscode-releases.ps1 -version "${{ steps.last_release.outputs.RELEASE_VERSION }}" -packageJsonFilePath "./vscode/packages/microsoft-kiota/package.json"
+        -runtimeFilePath "./vscode/packages/npm-package/lib/runtime.json" -online
+      shell: pwsh
+    - name: Install dependencies
+      run: npm ci
+      working-directory: vscode
+    - run: npm run package:${{ matrix.builds.id }}
+      if: matrix.builds.id == 'package'
+      name: Package - ${{ matrix.builds.id }}
+      working-directory: vscode
+    - run: 'npm i
+
+        npm run build
+
+        '
+      working-directory: vscode/packages/
+      name: Package - ${{ matrix.builds.id }}
+      if: matrix.builds.id == 'vscode'
+    - run: 'npm i -g @vscode/vsce
+
+        vsce package
+
+        '
+      working-directory: vscode/packages/${{ matrix.builds.path }}
+      name: Package - ${{ matrix.builds.id }}
+      if: matrix.builds.id == 'vscode'
+    - name: Upload artifact
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.builds.name }}
+        path: vscode/packages/${{ matrix.builds.path }}/*.${{ matrix.builds.item }}
+  vscode-build_extension:
+    runs-on: ubuntu-latest
+    needs:
+    - vscode-build
+    if: always()
+    steps:
+    - name: All build matrix options are successful
+      if: ${{ !(contains(needs.*.result, 'failure')) }}
+      run: exit 0
+    - name: One or more build matrix options failed
+      if: ${{ contains(needs.*.result, 'failure') }}
+      run: exit 1
 'on':
   workflow_dispatch:
     inputs:
