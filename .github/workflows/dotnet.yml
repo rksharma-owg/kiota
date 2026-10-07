@@ -9,12 +9,12 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+        ref: 20897ef426b8d9713b1bdc8fbe95ec0f23e18643
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+      run: 'test "$(git rev-parse HEAD)" = "20897ef426b8d9713b1bdc8fbe95ec0f23e18643"
 
         git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
 
@@ -36,8 +36,7 @@ jobs:
     - name: Build
       run: dotnet build kiota.slnx --no-restore
     - name: Test
-      run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format
-        cobertura --report-gh
+      run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --report-gh
     - name: Install report generator
       run: dotnet tool install --global dotnet-reportgenerator-globaltool
     - name: Generate coverage report
@@ -46,9 +45,8 @@ jobs:
       run: cat ./reports/coverage/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
     - name: Upload coverage report
       uses: actions/upload-code-coverage@bfa741d815a28cb064a8e3a0837e577457a017d5
-      if: github.event_name != 'merge_group' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name
-        == github.repository && github.actor != 'dependabot[bot]') || (github.event_name != 'pull_request' && github.ref_name
-        == github.event.repository.default_branch))
+      if: github.event_name != 'merge_group' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor
+        != 'dependabot[bot]') || (github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch))
       with:
         file: ./reports/coverage/Cobertura.xml
         language: CSharp
@@ -71,12 +69,12 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+        ref: 20897ef426b8d9713b1bdc8fbe95ec0f23e18643
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+      run: 'test "$(git rev-parse HEAD)" = "20897ef426b8d9713b1bdc8fbe95ec0f23e18643"
 
         git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
 
@@ -105,9 +103,8 @@ jobs:
         '
     - name: Check the built in default settings
       if: runner.os != 'Windows'
-      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]];\
-        \ then\n  echo \"Built in defaults are working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os\
-        \ }}/kiota info -l Java\n  exit 1\nfi\n"
+      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]]; then\n  echo \"Built in defaults are working\"\
+        \nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os }}/kiota info -l Java\n  exit 1\nfi\n"
     - name: Isolate the binary
       if: runner.os == 'Windows'
       run: 'mkdir ./${{ matrix.os }}-standalone
@@ -118,9 +115,58 @@ jobs:
     - name: Check the built in default settings
       if: runner.os == 'Windows'
       shell: bash
-      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota.exe info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"\
-        * ]]; then\n  echo \"Built in defaults are working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os\
-        \ }}/kiota info -l Java\n  exit 1\nfi\n"
-
+      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota.exe info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]]; then\n  echo \"Built in defaults are\
+        \ working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os }}/kiota info -l Java\n  exit 1\nfi\n"
+  model-factory-regression:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-latest
+        - windows-latest
+        - macos-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 20897ef426b8d9713b1bdc8fbe95ec0f23e18643
+        persist-credentials: false
+    - name: Verify contribution SHA
+      shell: bash
+      run: test "$(git rev-parse HEAD)" = "20897ef426b8d9713b1bdc8fbe95ec0f23e18643"
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.sha }}
+        path: harness
+        persist-credentials: false
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 9af1cce7e4475dff80bb8d7f48859e9dedbbccef
+        path: baseline
+        persist-credentials: false
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: global.json
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version: stable
+    - name: Prove baseline regression and patch success
+      shell: bash
+      run: "set -euo pipefail\ntest \"$(git -C harness rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(git -C baseline rev-parse HEAD)\" = \"9af1cce7e4475dff80bb8d7f48859e9dedbbccef\"\
+        \ncp tests/Kiota.Builder.Tests/KiotaBuilderTests.ModelFactory.cs baseline/tests/Kiota.Builder.Tests/\nif dotnet test baseline/tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj\
+        \ -- --filter-method '*CreatesBackwardCompatibleFactoryWhileSharedModelPropertiesAreBuildingAsync*' > baseline-regression.log 2>&1; then\n  cat baseline-regression.log\n\
+        \  echo 'Expected missing factory regression to fail'\n  exit 1\nfi\ncat baseline-regression.log\ngrep -F 'Sequence contains no matching element' baseline-regression.log\n\
+        grep -E 'failed: +2' baseline-regression.log\ndotnet test tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj -- --filter-method '*CreatesBackwardCompatibleFactoryWhileSharedModelPropertiesAreBuildingAsync*'\n"
+    - name: Generate shared response stress fixtures
+      shell: bash
+      run: "set -euo pipefail\ndotnet build src/kiota/kiota.csproj -f net10.0\nfor language in CSharp Go; do\n  for attempt in 1 2 3 4 5; do\n    dotnet src/kiota/bin/Debug/net10.0/kiota.dll\
+        \ generate -l \"$language\" -d harness/.preflight/csharp-race-stress.json -o \"stress-$language\" --co\n  done\ndone\n"
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      if: always()
+      with:
+        name: race-regression-${{ matrix.os }}
+        path: baseline-regression.log
 'on':
   workflow_dispatch: null
