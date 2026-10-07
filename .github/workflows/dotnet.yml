@@ -9,14 +9,14 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+        ref: ${{ inputs.contributionSha }}
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
 
-        git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
+        git merge-base --is-ancestor ${{ inputs.targetSha }} HEAD
 
         git rev-parse HEAD
 
@@ -69,14 +69,14 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+        ref: ${{ inputs.contributionSha }}
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
 
-        git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
+        git merge-base --is-ancestor ${{ inputs.targetSha }} HEAD
 
         git rev-parse HEAD
 
@@ -122,10 +122,10 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+        ref: ${{ inputs.contributionSha }}
         persist-credentials: false
     - name: Verify contribution SHA
-      run: test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+      run: test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         ref: ${{ github.sha }}
@@ -133,7 +133,7 @@ jobs:
         persist-credentials: false
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 9af1cce7e4475dff80bb8d7f48859e9dedbbccef
+        ref: ${{ inputs.targetSha }}
         path: baseline
         persist-credentials: false
     - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
@@ -144,7 +144,7 @@ jobs:
         sdk: stable
     - name: Generate baseline and patch clients
       shell: bash
-      run: "set -euo pipefail\ntest \"$(git -C harness rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(git -C baseline rev-parse HEAD)\" = \"9af1cce7e4475dff80bb8d7f48859e9dedbbccef\"\
+      run: "set -euo pipefail\ntest \"$(git -C harness rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(git -C baseline rev-parse HEAD)\" = \"${{ inputs.targetSha }}\"\
         \ndotnet build src/kiota/kiota.csproj -f net10.0\ndotnet build baseline/src/kiota/kiota.csproj -f net10.0\nfor output in baseline-client patch-client; do\n\
         \  mkdir -p \"$output/lib\"\n  cp it/dart/pubspec.yaml it/dart/analysis_options.yaml \"$output/\"\ndone\ndotnet baseline/src/kiota/bin/Debug/net10.0/kiota.dll\
         \ generate -l Dart -d harness/.preflight/dart-inline-items.json -o baseline-client/lib --co --ebc\ndotnet src/kiota/bin/Debug/net10.0/kiota.dll generate -l\
@@ -166,5 +166,72 @@ jobs:
           patch-client/pubspec.lock
 
           '
+    if: ${{ inputs.prNumber == '8346' }}
+  model-factory-regression:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-latest
+        - windows-latest
+        - macos-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.contributionSha }}
+        persist-credentials: false
+    - name: Verify contribution SHA
+      shell: bash
+      run: test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.sha }}
+        path: harness
+        persist-credentials: false
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.targetSha }}
+        path: baseline
+        persist-credentials: false
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: global.json
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version: stable
+    - name: Prove baseline regression and patch success
+      shell: bash
+      run: "set -euo pipefail\ntest \"$(git -C harness rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(git -C baseline rev-parse HEAD)\" = \"${{ inputs.targetSha }}\"\
+        \ncp tests/Kiota.Builder.Tests/KiotaBuilderTests.ModelFactory.cs baseline/tests/Kiota.Builder.Tests/\nif dotnet test baseline/tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj\
+        \ -- --filter-method '*CreatesBackwardCompatibleFactoryWhileSharedModelPropertiesAreBuildingAsync*' > baseline-regression.log 2>&1; then\n  cat baseline-regression.log\n\
+        \  echo 'Expected missing factory regression to fail'\n  exit 1\nfi\ncat baseline-regression.log\ngrep -F 'Sequence contains no matching element' baseline-regression.log\n\
+        grep -E 'failed: +2' baseline-regression.log\ndotnet test tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj -- --filter-method '*CreatesBackwardCompatibleFactoryWhileSharedModelPropertiesAreBuildingAsync*'\n"
+    - name: Generate shared response stress fixtures
+      shell: bash
+      run: "set -euo pipefail\ndotnet build src/kiota/kiota.csproj -f net10.0\nfor language in CSharp Go; do\n  for attempt in 1 2 3 4 5; do\n    dotnet src/kiota/bin/Debug/net10.0/kiota.dll\
+        \ generate -l \"$language\" -d harness/.preflight/csharp-race-stress.json -o \"stress-$language\" --co\n  done\ndone\n"
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      if: always()
+      with:
+        name: race-regression-${{ matrix.os }}
+        path: baseline-regression.log
+    if: ${{ inputs.prNumber == '8347' }}
 'on':
-  workflow_dispatch: null
+  workflow_dispatch:
+    inputs:
+      contributionSha:
+        description: Exact contribution commit
+        required: true
+        type: string
+      targetSha:
+        description: Current upstream main
+        required: true
+        type: string
+      prNumber:
+        description: Contribution PR
+        required: true
+        type: string
+run-name: PR ${{ inputs.prNumber }} conflict validation - .NET

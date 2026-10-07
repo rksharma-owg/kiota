@@ -1,6 +1,6 @@
 name: integration-tests
 concurrency:
-  group: ci-integration-tests-${{ github.ref }}
+  group: ci-integration-tests-${{ github.ref }}-${{ inputs.contributionSha }}
   cancel-in-progress: true
 jobs:
   build:
@@ -8,14 +8,14 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+        ref: ${{ inputs.contributionSha }}
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
 
-        git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
+        git merge-base --is-ancestor ${{ inputs.targetSha }} HEAD
 
         git rev-parse HEAD
 
@@ -27,8 +27,7 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore kiota.slnx
     - name: Build
-      run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -p:PublishReadyToRun=true -o ./publish
-        -f net10.0
+      run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -p:PublishReadyToRun=true -o ./publish -f net10.0
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
         name: generator
@@ -55,14 +54,14 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+        ref: ${{ inputs.contributionSha }}
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
 
-        git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
+        git merge-base --is-ancestor ${{ inputs.targetSha }} HEAD
 
         git rev-parse HEAD
 
@@ -126,14 +125,14 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+        ref: ${{ inputs.contributionSha }}
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
 
-        git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
+        git merge-base --is-ancestor ${{ inputs.targetSha }} HEAD
 
         git rev-parse HEAD
 
@@ -196,8 +195,7 @@ jobs:
         sdk: stable
     - name: Check if test is suppressed
       id: check-suppressed
-      run: '$isSuppressed = . ./it/get-is-suppressed.ps1 -descriptionUrl ${{ matrix.description }} -language ${{ matrix.language
-        }}
+      run: '$isSuppressed = . ./it/get-is-suppressed.ps1 -descriptionUrl ${{ matrix.description }} -language ${{ matrix.language }}
 
         Write-Output "IS_SUPPRESSED=$($isSuppressed.ToString().ToLowerInvariant())" >> $Env:GITHUB_OUTPUT
 
@@ -206,8 +204,8 @@ jobs:
     - name: Generate Code
       shell: pwsh
       timeout-minutes: 20
-      run: ./it/generate-code.ps1 -descriptionUrl "${{ steps.replace_url.outputs.DESCRIPTION_PATH }}" -descriptionKey ${{
-        matrix.description }} -language "${{ matrix.language }}"
+      run: ./it/generate-code.ps1 -descriptionUrl "${{ steps.replace_url.outputs.DESCRIPTION_PATH }}" -descriptionKey ${{ matrix.description }} -language "${{ matrix.language
+        }}"
       continue-on-error: ${{ steps.check-suppressed.outputs.IS_SUPPRESSED == 'true' }}
     - name: Execute the IT test
       shell: pwsh
@@ -242,4 +240,18 @@ jobs:
       if: ${{ contains(needs.*.result, 'failure') }}
       run: exit 1
 'on':
-  workflow_dispatch: null
+  workflow_dispatch:
+    inputs:
+      contributionSha:
+        description: Exact contribution commit
+        required: true
+        type: string
+      targetSha:
+        description: Current upstream main
+        required: true
+        type: string
+      prNumber:
+        description: Contribution PR
+        required: true
+        type: string
+run-name: PR ${{ inputs.prNumber }} conflict validation - integration-tests

@@ -16,14 +16,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+        ref: ${{ inputs.contributionSha }}
         fetch-depth: 0
         persist-credentials: false
     - name: Verify exact contribution and target commit
       shell: bash
-      run: 'test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
 
-        git merge-base --is-ancestor 9af1cce7e4475dff80bb8d7f48859e9dedbbccef HEAD
+        git merge-base --is-ancestor ${{ inputs.targetSha }} HEAD
 
         git rev-parse HEAD
 
@@ -43,4 +43,18 @@ jobs:
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2
 'on':
-  workflow_dispatch: null
+  workflow_dispatch:
+    inputs:
+      contributionSha:
+        description: Exact contribution commit
+        required: true
+        type: string
+      targetSha:
+        description: Current upstream main
+        required: true
+        type: string
+      prNumber:
+        description: Contribution PR
+        required: true
+        type: string
+run-name: PR ${{ inputs.prNumber }} conflict validation - CodeQL
