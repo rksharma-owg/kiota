@@ -36,8 +36,7 @@ jobs:
     - name: Build
       run: dotnet build kiota.slnx --no-restore
     - name: Test
-      run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format
-        cobertura --report-gh
+      run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --report-gh
     - name: Install report generator
       run: dotnet tool install --global dotnet-reportgenerator-globaltool
     - name: Generate coverage report
@@ -46,9 +45,8 @@ jobs:
       run: cat ./reports/coverage/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
     - name: Upload coverage report
       uses: actions/upload-code-coverage@bfa741d815a28cb064a8e3a0837e577457a017d5
-      if: github.event_name != 'merge_group' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name
-        == github.repository && github.actor != 'dependabot[bot]') || (github.event_name != 'pull_request' && github.ref_name
-        == github.event.repository.default_branch))
+      if: github.event_name != 'merge_group' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor
+        != 'dependabot[bot]') || (github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch))
       with:
         file: ./reports/coverage/Cobertura.xml
         language: CSharp
@@ -105,9 +103,8 @@ jobs:
         '
     - name: Check the built in default settings
       if: runner.os != 'Windows'
-      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]];\
-        \ then\n  echo \"Built in defaults are working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os\
-        \ }}/kiota info -l Java\n  exit 1\nfi\n"
+      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]]; then\n  echo \"Built in defaults are working\"\
+        \nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os }}/kiota info -l Java\n  exit 1\nfi\n"
     - name: Isolate the binary
       if: runner.os == 'Windows'
       run: 'mkdir ./${{ matrix.os }}-standalone
@@ -118,9 +115,56 @@ jobs:
     - name: Check the built in default settings
       if: runner.os == 'Windows'
       shell: bash
-      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota.exe info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"\
-        * ]]; then\n  echo \"Built in defaults are working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os\
-        \ }}/kiota info -l Java\n  exit 1\nfi\n"
+      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota.exe info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]]; then\n  echo \"Built in defaults are\
+        \ working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os }}/kiota info -l Java\n  exit 1\nfi\n"
+  dart-import-regression:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 48bf1bfc2dd1f8cd5b412153e9d343bfda66444e
+        persist-credentials: false
+    - name: Verify contribution SHA
+      run: test "$(git rev-parse HEAD)" = "48bf1bfc2dd1f8cd5b412153e9d343bfda66444e"
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.sha }}
+        path: harness
+        persist-credentials: false
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 9af1cce7e4475dff80bb8d7f48859e9dedbbccef
+        path: baseline
+        persist-credentials: false
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: global.json
+    - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d
+      with:
+        sdk: stable
+    - name: Generate baseline and patch clients
+      shell: bash
+      run: "set -euo pipefail\ntest \"$(git -C harness rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(git -C baseline rev-parse HEAD)\" = \"9af1cce7e4475dff80bb8d7f48859e9dedbbccef\"\
+        \ndotnet build src/kiota/kiota.csproj -f net10.0\ndotnet build baseline/src/kiota/kiota.csproj -f net10.0\nfor output in baseline-client patch-client; do\n\
+        \  mkdir -p \"$output/lib\"\n  cp it/dart/pubspec.yaml it/dart/analysis_options.yaml \"$output/\"\ndone\ndotnet baseline/src/kiota/bin/Debug/net10.0/kiota.dll\
+        \ generate -l Dart -d harness/.preflight/dart-inline-items.json -o baseline-client/lib --co --ebc\ndotnet src/kiota/bin/Debug/net10.0/kiota.dll generate -l\
+        \ Dart -d harness/.preflight/dart-inline-items.json -o patch-client/lib --co --ebc\n"
+    - name: Verify baseline compiler failure and patch compiler success
+      shell: bash
+      run: "set -euo pipefail\ndart --version\ncd baseline-client\ndart pub get\nif dart analyze lib/ > ../baseline-analyze.log 2>&1; then\n  cat ../baseline-analyze.log\n\
+        \  echo 'Expected the baseline missing import to fail analysis'\n  exit 1\nfi\ncat ../baseline-analyze.log\ngrep -F 'uri_does_not_exist' ../baseline-analyze.log\n\
+        cd ../patch-client\ncp ../baseline-client/pubspec.lock .\ndart pub get --enforce-lockfile\ndart analyze lib/\ncd ..\ndiff -ru baseline-client/lib patch-client/lib\
+        \ > source.diff || test \"$?\" = 1\ncat source.diff\n"
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      if: always()
+      with:
+        name: dart-regression-evidence
+        path: 'baseline-analyze.log
 
+          source.diff
+
+          patch-client/pubspec.lock
+
+          '
 'on':
   workflow_dispatch: null
