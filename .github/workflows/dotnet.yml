@@ -1,6 +1,7 @@
 name: .NET
 jobs:
   dotnet-build:
+    if: ${{ !inputs.coverageOnly }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -56,6 +57,7 @@ jobs:
         name: coverage
         path: reports/coverage
   test-release:
+    if: ${{ !inputs.coverageOnly }}
     strategy:
       fail-fast: false
       matrix:
@@ -166,7 +168,7 @@ jobs:
           patch-client/pubspec.lock
 
           '
-    if: ${{ inputs.prNumber == '8346' }}
+    if: ${{ !inputs.coverageOnly && (inputs.prNumber == '8346') }}
   model-factory-regression:
     runs-on: ${{ matrix.os }}
     permissions:
@@ -218,8 +220,9 @@ jobs:
       with:
         name: race-regression-${{ matrix.os }}
         path: baseline-regression.log
-    if: ${{ inputs.prNumber == '8347' }}
+    if: ${{ !inputs.coverageOnly && (inputs.prNumber == '8347') }}
   vscode-test_and_generate_binaries:
+    if: ${{ !inputs.coverageOnly }}
     strategy:
       fail-fast: false
       matrix:
@@ -326,6 +329,7 @@ jobs:
         path: vscode/packages/npm-package/.kiotabin/${{ steps.last_release.outputs.RELEASE_VERSION }}/${{ matrix.binaries.architecture }}
         retention-days: 3
   vscode-build:
+    if: ${{ !inputs.coverageOnly }}
     needs:
     - vscode-test_and_generate_binaries
     runs-on: ubuntu-latest
@@ -403,7 +407,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
     - vscode-build
-    if: always()
+    if: ${{ !inputs.coverageOnly && (always()) }}
     steps:
     - name: All build matrix options are successful
       if: ${{ !(contains(needs.*.result, 'failure')) }}
@@ -412,6 +416,7 @@ jobs:
       if: ${{ contains(needs.*.result, 'failure') }}
       run: exit 1
   generated-php:
+    if: ${{ !inputs.coverageOnly }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -462,9 +467,80 @@ jobs:
           documented('generated/Legacy/LegacyRequestBuilder.php', r'public function toGetRequestInformation\(')
           print('Generated model, enum, accessors and operation expose PHPDoc deprecation metadata.')
           PY
+  explicit-coverage:
+    if: ${{ inputs.coverageOnly }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: contribution
+            sha: ${{ inputs.contributionSha }}
+          - kind: baseline
+            sha: ${{ inputs.targetSha }}
+          - kind: merge
+            sha: ${{ inputs.mergeSha }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify tested commit
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ matrix.sha }}"
+          git rev-parse HEAD
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: stable
+      - name: Restore and build unchanged source
+        run: |
+          dotnet restore kiota.slnx
+          dotnet build kiota.slnx --no-restore
+      - name: Run full suite with explicit production assembly coverage
+        run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --coverlet-include '[Kiota.Builder]*' --coverlet-include '[kiota]*' --coverlet-exclude '[*.Tests]*'
+      - name: Reject empty coverage and verify changed helper is exercised
+        env:
+          TEST_KIND: ${{ matrix.kind }}
+        run: |
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          import os, xml.etree.ElementTree as E
+          reports=list(Path('TestResults').rglob('coverage.cobertura.*.xml'))
+          assert len(reports)==3, reports
+          helper=[]
+          for report in reports:
+              root=E.parse(report).getroot()
+              assert int(root.get('lines-valid','0'))>0, report
+              assert int(root.get('lines-covered','0'))>0, report
+              print(report, root.attrib)
+              for cls in root.findall('.//class'):
+                  if cls.get('name')=='Kiota.Builder.Writers.Php.PhpConventionService':
+                      helper.extend(m for m in cls.findall('methods/method') if m.get('name')=='GetDeprecationDescription')
+          if os.environ['TEST_KIND']!='baseline':
+              assert helper and any(float(m.get('line-rate','0'))==1 and float(m.get('branch-rate','0'))==1 for m in helper), [m.attrib for m in helper]
+              print('Deprecation helper has 100% line and branch coverage in the writer suite.')
+          PYTHON
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: explicit-coverage-${{ matrix.kind }}
+          path: TestResults/**/coverage.cobertura.*.xml
 'on':
   workflow_dispatch:
     inputs:
+      coverageOnly:
+        description: Run supplemental non-empty coverage checks only
+        type: boolean
+        default: false
+      mergeSha:
+        description: Exact temporary merge commit for supplemental coverage
+        type: string
+        required: false
       contributionSha:
         description: Exact contribution commit
         required: true
