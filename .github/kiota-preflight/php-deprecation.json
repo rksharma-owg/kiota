@@ -1,0 +1,56 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Deprecation regression",
+    "version": "1"
+  },
+  "servers": [
+    {
+      "url": "https://example.com"
+    }
+  ],
+  "paths": {
+    "/legacy": {
+      "get": {
+        "deprecated": true,
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Legacy"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Legacy": {
+        "type": "object",
+        "deprecated": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "deprecated": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/LegacyStatus"
+          }
+        }
+      },
+      "LegacyStatus": {
+        "type": "string",
+        "deprecated": true,
+        "enum": [
+          "old",
+          "new"
+        ]
+      }
+    }
+  }
+}
