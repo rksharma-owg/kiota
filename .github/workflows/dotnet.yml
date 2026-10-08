@@ -44,7 +44,7 @@ jobs:
     - name: Add coverage to job summary
       run: cat ./reports/coverage/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
     - name: Upload coverage report
-      uses: actions/upload-code-coverage@bfa741d815a28cb064a8e3a0837e577457a017d5
+      uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52
       if: github.event_name != 'merge_group' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor
         != 'dependabot[bot]') || (github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch))
       with:
@@ -285,15 +285,40 @@ jobs:
       run: npm run lint
       working-directory: vscode
     - name: Run tests - package
-      run: "if [[ \"${{ matrix.binaries.os }}\" == \"ubuntu-latest\" ]]; then\n  xvfb-run -a npm run test:package:coverage\nelse\n  npm run test:package:coverage\n\
-        fi\n"
       shell: bash
       working-directory: vscode
+      run: |
+        set -euo pipefail
+        runtime="${{ steps.last_release.outputs.RELEASE_VERSION }}"
+        arch="${{ matrix.binaries.architecture }}"
+        mkdir -p "packages/npm-package/lib/.kiotabin/$runtime/$arch"
+        cp -R "packages/npm-package/.kiotabin/$runtime/$arch/." "packages/npm-package/lib/.kiotabin/$runtime/$arch/"
+        if [[ "${{ runner.os }}" == "Linux" ]]; then
+          xvfb-run -a npm run test:package:coverage
+        else
+          npm run test:package:coverage
+        fi
     - name: Run tests - vscode
-      run: "if [[ \"${{ matrix.binaries.os }}\" == \"ubuntu-latest\" ]]; then\n  xvfb-run -a npm run test:vscode:coverage\nelse\n  npm run test:vscode:coverage\n\
-        fi\n"
       shell: bash
       working-directory: vscode
+      run: |
+        set -euo pipefail
+        npm run build
+        npm run pretest --workspace=kiota
+        node - <<'JS'
+        const fs = require('fs');
+        const config = `import original from './.vscode-test.mjs';
+        import os from 'node:os';
+        import path from 'node:path';
+        export default {...original, tests: original.tests.map(test => ({...test, launchArgs: ['--user-data-dir=' + path.join(os.tmpdir(), 'kiota-preflight-user'), '--extensions-dir=' + path.join(os.tmpdir(), 'kiota-preflight-ext')]}))};`;
+        fs.writeFileSync('packages/microsoft-kiota/.vscode-test.preflight.mjs', config);
+        JS
+        if [[ "${{ runner.os }}" == "Linux" ]]; then
+          xvfb-run -a npx vscode-test --config packages/microsoft-kiota/.vscode-test.preflight.mjs --coverage | tee vscode-tests.log
+        else
+          npx vscode-test --config packages/microsoft-kiota/.vscode-test.preflight.mjs --coverage | tee vscode-tests.log
+        fi
+        grep -E '[1-9][0-9]* passing' vscode-tests.log
     - name: Upload artifact
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
