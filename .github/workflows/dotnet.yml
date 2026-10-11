@@ -1,122 +1,158 @@
 name: .NET
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-  pull_request:
-  merge_group:
-
 jobs:
   dotnet-build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      code-quality: write
-      pull-requests: read
-
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-      - name: Setup Go
-        # required so the integration tests can run gofmt against the generated Go code
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: stable
-      - name: Restore dependencies
-        run: dotnet restore kiota.slnx
-      - name: Check formatting
-        run: dotnet format --verify-no-changes
-      - name: Build
-        run: dotnet build kiota.slnx --no-restore
-      - name: Test
-        run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --coverlet-include '[Kiota.Builder]*' --coverlet-include '[kiota]*' --coverlet-exclude '[*.Tests]*' --report-gh
-      - name: Install report generator
-        run: dotnet tool install --global dotnet-reportgenerator-globaltool
-      - name: Generate coverage report
-        run: reportgenerator -reports:./TestResults/**/coverage.cobertura.*.xml -targetdir:./reports/coverage -reporttypes:"Html;MarkdownSummaryGithub;Cobertura"
-      - name: Add coverage to job summary
-        run: cat ./reports/coverage/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
-      - name: Upload coverage report
-        uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52 # v1.4.4
-        if: github.event_name != 'merge_group' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') || (github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch))
-        with:
-          file: ./reports/coverage/Cobertura.xml
-          language: CSharp
-          label: code-coverage/dotnet
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage
-          path: reports/coverage
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.contributionSha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify contribution and current target SHA
+      shell: bash
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
 
+        git merge-base --is-ancestor "${{ inputs.targetSha }}" HEAD
+
+        git rev-parse HEAD
+
+        '
+    - name: Setup .NET
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: global.json
+    - name: Setup Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version: stable
+    - name: Restore dependencies
+      run: dotnet restore kiota.slnx
+    - name: Check formatting
+      run: dotnet format --verify-no-changes
+    - name: Build
+      run: dotnet build kiota.slnx --no-restore
+    - name: Test
+      run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --coverlet-include
+        '[Kiota.Builder]*' --coverlet-include '[kiota]*' --coverlet-exclude '[*.Tests]*' --report-gh
+    - name: Install report generator
+      run: dotnet tool install --global dotnet-reportgenerator-globaltool
+    - name: Generate coverage report
+      run: reportgenerator -reports:./TestResults/**/coverage.cobertura.*.xml -targetdir:./reports/coverage -reporttypes:"Html;MarkdownSummaryGithub;Cobertura"
+    - name: Add coverage to job summary
+      run: cat ./reports/coverage/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+    - name: Upload coverage report
+      uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52
+      if: github.event_name != 'merge_group' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor
+        != 'dependabot[bot]') || (github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch))
+      with:
+        file: ./reports/coverage/Cobertura.xml
+        language: CSharp
+        label: code-coverage/dotnet
+    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: coverage
+        path: reports/coverage
   test-release:
     strategy:
       fail-fast: false
       matrix:
         os:
-          [
-            ubuntu-latest,
-            macos-latest,
-            windows-latest,
-            windows-11-arm,
-            ubuntu-24.04-arm,
-          ]
+        - ubuntu-latest
+        - macos-latest
+        - windows-latest
+        - windows-11-arm
+        - ubuntu-24.04-arm
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-      - name: Restore dependencies
-        run: dotnet restore kiota.slnx
-      - name: Publish ${{ matrix.os }}
-        run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -o ./${{ matrix.os }} -f net10.0
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.contributionSha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify contribution and current target SHA
+      shell: bash
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ matrix.os }}
-          path: ./${{ matrix.os }}
+        git merge-base --is-ancestor "${{ inputs.targetSha }}" HEAD
 
-      # Mac and Linux
-      - name: Isolate the binary
-        if: runner.os != 'Windows'
-        run: |
-          mkdir ./${{ matrix.os }}-standalone
-          cp ./${{ matrix.os }}/kiota ./${{ matrix.os }}-standalone/kiota
-      - name: Check the built in default settings
-        if: runner.os != 'Windows'
-        run: |
-          INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota info -l Java)
-          if [[ $INFO_RESULT == *"maturity level"* ]]; then
-            echo "Built in defaults are working"
-          else
-            echo "Built in defaults NOT working"
-            ./${{ matrix.os }}/kiota info -l Java
-            exit 1
-          fi
+        git rev-parse HEAD
 
-      # Win
-      - name: Isolate the binary
-        if: runner.os == 'Windows'
-        run: |
-          mkdir ./${{ matrix.os }}-standalone
-          cp ./${{ matrix.os }}/kiota.exe ./${{ matrix.os }}-standalone/kiota.exe
-      - name: Check the built in default settings
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota.exe info -l Java)
-          if [[ $INFO_RESULT == *"maturity level"* ]]; then
-            echo "Built in defaults are working"
-          else
-            echo "Built in defaults NOT working"
-            ./${{ matrix.os }}/kiota info -l Java
-            exit 1
-          fi
+        '
+    - name: Setup .NET
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: global.json
+    - name: Restore dependencies
+      run: dotnet restore kiota.slnx
+    - name: Publish ${{ matrix.os }}
+      run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -o ./${{ matrix.os }} -f net10.0
+    - name: Upload artifact
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ${{ matrix.os }}
+        path: ./${{ matrix.os }}
+    - name: Isolate the binary
+      if: runner.os != 'Windows'
+      run: 'mkdir ./${{ matrix.os }}-standalone
+
+        cp ./${{ matrix.os }}/kiota ./${{ matrix.os }}-standalone/kiota
+
+        '
+    - name: Check the built in default settings
+      if: runner.os != 'Windows'
+      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]]; then\n  echo \"Built in defaults are working\"\
+        \nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os }}/kiota info -l Java\n  exit 1\nfi\n"
+    - name: Isolate the binary
+      if: runner.os == 'Windows'
+      run: 'mkdir ./${{ matrix.os }}-standalone
+
+        cp ./${{ matrix.os }}/kiota.exe ./${{ matrix.os }}-standalone/kiota.exe
+
+        '
+    - name: Check the built in default settings
+      if: runner.os == 'Windows'
+      shell: bash
+      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota.exe info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]]; then\n  echo \"Built in defaults are\
+        \ working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os }}/kiota info -l Java\n  exit 1\nfi\n"
+  generated-client-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        path: harness
+        persist-credentials: false
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.contributionSha }}
+        path: contribution
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify source and target SHA
+      working-directory: contribution
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
+
+        git merge-base --is-ancestor "${{ inputs.targetSha }}" HEAD
+
+        git rev-parse HEAD
+
+        '
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: contribution/global.json
+    - name: Build generator
+      working-directory: contribution
+      run: dotnet build src/kiota/kiota.csproj -f net10.0
+    - name: Compile and exercise generated clients in all three modes
+      run: python3 harness/.github/kiota-preflight/csharp-smoke.py contribution/src/kiota/bin/Debug/net10.0/kiota.dll harness/.github/kiota-preflight/readonly.json
+'on':
+  workflow_dispatch:
+    inputs:
+      contributionSha:
+        type: string
+        required: true
+      targetSha:
+        type: string
+        required: true
+run-name: C# readonly preflight ${{ inputs.contributionSha }}
+permissions:
+  contents: read

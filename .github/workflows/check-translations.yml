@@ -1,33 +1,44 @@
 name: Check Translations
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-  pull_request:
-  merge_group:
-
 permissions:
   contents: read
-
 jobs:
   check-translations:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.contributionSha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify contribution and target SHA
+      shell: bash
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22.x
+        git merge-base --is-ancestor "${{ inputs.targetSha }}" HEAD
 
-      - name: Run translation check
-        run: ./scripts/check-translations.ps1
-        shell: pwsh
+        git rev-parse HEAD
 
-      - name: Upload untranslated strings
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: untranslated-strings
-          path: ./untranslated_strings.html
+        '
+    - name: Set up Node.js
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      with:
+        node-version: 22.x
+    - name: Run translation check
+      run: ./scripts/check-translations.ps1
+      shell: pwsh
+    - name: Upload untranslated strings
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: untranslated-strings
+        path: ./untranslated_strings.html
+'on':
+  workflow_dispatch:
+    inputs:
+      contributionSha:
+        type: string
+        required: true
+      targetSha:
+        type: string
+        required: true
+run-name: C# readonly preflight ${{ inputs.contributionSha }}
