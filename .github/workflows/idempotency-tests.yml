@@ -30,7 +30,7 @@ jobs:
       run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -p:PublishReadyToRun=true -o ./publish -f net10.0
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
-        name: generator
+        name: generator-csharp-readonly-idempotency-tests-${{ github.run_id }}
         path: publish
   download-openapi-specs:
     runs-on: ubuntu-latest
@@ -67,7 +67,7 @@ jobs:
         '
     - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
       with:
-        name: generator
+        name: generator-csharp-readonly-idempotency-tests-${{ github.run_id }}
         path: publish
     - run: chmod a+x ./publish/kiota
     - name: Download OpenAPI specs
@@ -132,7 +132,7 @@ jobs:
         path: description
     - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
       with:
-        name: generator
+        name: generator-csharp-readonly-idempotency-tests-${{ github.run_id }}
         path: publish
     - run: chmod a+x ./publish/kiota
     - name: Check if test is suppressed
@@ -153,17 +153,6 @@ jobs:
       with:
         name: idempotency-${{ matrix.language }}-${{ steps.replace_url.outputs.ARTKEY }}
         path: idempotency-results/*.zip
-  cleanup:
-    runs-on: ubuntu-latest
-    needs: idempotency
-    steps:
-    - uses: jimschubert/delete-artifacts-action@f5cb1978980f2e189a2b3484d430f8810860ba38
-      with:
-        artifact_name: generator
-        min_bytes: '0'
-    permissions:
-      actions: write
-      contents: read
   check-idempotency-tests:
     runs-on: ubuntu-latest
     needs: idempotency
