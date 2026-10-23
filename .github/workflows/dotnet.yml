@@ -5,7 +5,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      code-quality: write
       pull-requests: read
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -37,13 +36,13 @@ jobs:
     - name: Build
       run: dotnet build kiota.slnx --no-restore
     - name: Test
-      run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --report-gh
+      run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --coverlet-include '[Kiota.Builder]*' --coverlet-include '[kiota]*' --coverlet-exclude '[*.Tests]*' --report-gh
     - name: Install report generator
       run: dotnet tool install --global dotnet-reportgenerator-globaltool
     - name: Generate coverage report
       run: reportgenerator -reports:./TestResults/**/coverage.cobertura.*.xml -targetdir:./reports/coverage -reporttypes:"Html;MarkdownSummaryGithub;Cobertura"
     - name: Add coverage to job summary
-      run: cat ./reports/coverage/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+      run: cat ./reports/coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
     - name: Upload coverage report
       uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52
       if: github.event_name != 'merge_group' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor
@@ -52,7 +51,7 @@ jobs:
         file: ./reports/coverage/Cobertura.xml
         language: CSharp
         label: code-coverage/dotnet
-    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       with:
         name: coverage
         path: reports/coverage
@@ -92,7 +91,7 @@ jobs:
     - name: Publish ${{ matrix.os }}
       run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -o ./${{ matrix.os }} -f net10.0
     - name: Upload artifact
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       with:
         name: ${{ matrix.os }}
         path: ./${{ matrix.os }}
@@ -157,7 +156,7 @@ jobs:
         \  echo 'Expected the baseline missing import to fail analysis'\n  exit 1\nfi\ncat ../baseline-analyze.log\ngrep -F 'uri_does_not_exist' ../baseline-analyze.log\n\
         cd ../patch-client\ncp ../baseline-client/pubspec.lock .\ndart pub get --enforce-lockfile\ndart analyze lib/\ncd ..\ndiff -ru baseline-client/lib patch-client/lib\
         \ > source.diff || test \"$?\" = 1\ncat source.diff\n"
-    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       if: always()
       with:
         name: dart-regression-evidence
@@ -213,9 +212,9 @@ jobs:
         grep -E 'failed: +2' baseline-regression.log\ndotnet test tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj -- --filter-method '*CreatesBackwardCompatibleFactoryWhileSharedModelPropertiesAreBuildingAsync*'\n"
     - name: Generate shared response stress fixtures
       shell: bash
-      run: "set -euo pipefail\ndotnet build src/kiota/kiota.csproj -f net10.0\nfor language in CSharp Go; do\n  for attempt in 1 2 3 4 5; do\n    dotnet src/kiota/bin/Debug/net10.0/kiota.dll\
+      run: "set -euo pipefail\ndotnet build src/kiota/kiota.csproj -f net10.0\nfor language in CSharp Go; do\n  for _ in 1 2 3 4 5; do\n    dotnet src/kiota/bin/Debug/net10.0/kiota.dll\
         \ generate -l \"$language\" -d harness/.preflight/csharp-race-stress.json -o \"stress-$language\" --co\n  done\ndone\n"
-    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       if: always()
       with:
         name: race-regression-${{ matrix.os }}
@@ -253,7 +252,7 @@ jobs:
         git rev-parse HEAD
 
         '
-    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
       with:
         node-version: 24.x
     - name: Use .NET SDK from global.json
@@ -323,7 +322,7 @@ jobs:
         fi
         grep -E '[1-9][0-9]* passing' vscode-tests.log
     - name: Upload artifact
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       with:
         name: ${{ matrix.binaries.architecture }}
         path: vscode/packages/npm-package/.kiotabin/${{ steps.last_release.outputs.RELEASE_VERSION }}/${{ matrix.binaries.architecture }}
@@ -359,7 +358,7 @@ jobs:
         git rev-parse HEAD
 
         '
-    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
       with:
         node-version: 24.x
     - id: last_release
@@ -399,7 +398,7 @@ jobs:
       name: Package - ${{ matrix.builds.id }}
       if: matrix.builds.id == 'vscode'
     - name: Upload artifact
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       with:
         name: ${{ matrix.builds.name }}
         path: vscode/packages/${{ matrix.builds.path }}/*.${{ matrix.builds.item }}
@@ -526,7 +525,7 @@ jobs:
               assert helper and any(float(m.get('line-rate','0'))==1 and float(m.get('branch-rate','0'))==1 for m in helper), [m.attrib for m in helper]
               print('Deprecation helper has 100% line and branch coverage in the writer suite.')
           PYTHON
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: explicit-coverage-${{ matrix.kind }}
           path: TestResults/**/coverage.cobertura.*.xml
@@ -591,7 +590,7 @@ jobs:
           TEST_KIND: ${{ matrix.kind }}
           TEST_SHA: ${{ matrix.sha }}
         run: python ../harness/.github/kiota-preflight/coverage-command.py
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: coverage-command-${{ matrix.kind }}
           path: contribution/TestResults/**/coverage.cobertura.*.xml
