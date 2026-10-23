@@ -1,33 +1,69 @@
-name: Check Translations
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-  pull_request:
-  merge_group:
-
-permissions:
-  contents: read
-
-jobs:
-  check-translations:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.0.0
-        with:
-          node-version: 22.x
-
-      - name: Run translation check
-        run: ./scripts/check-translations.ps1
-        shell: pwsh
-
-      - name: Upload untranslated strings
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
-        with:
-          name: untranslated-strings
-          path: ./untranslated_strings.html
+{
+  "name": "Check Translations",
+  "permissions": {
+    "contents": "read"
+  },
+  "jobs": {
+    "check-translations": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "name": "Checkout repository",
+          "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "with": {
+            "ref": "${{ inputs.contributionSha }}",
+            "fetch-depth": 0,
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Verify exact contribution and baseline",
+          "shell": "bash",
+          "env": {
+            "PATCH_SHA": "${{ inputs.contributionSha }}",
+            "BASE_SHA": "${{ inputs.targetSha }}"
+          },
+          "run": "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$PATCH_SHA\"\ngit merge-base --is-ancestor \"$BASE_SHA\" HEAD\ngit log -1 --format=fuller"
+        },
+        {
+          "name": "Set up Node.js",
+          "uses": "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+          "with": {
+            "node-version": "22.x"
+          }
+        },
+        {
+          "name": "Run translation check",
+          "run": "./scripts/check-translations.ps1",
+          "shell": "pwsh"
+        },
+        {
+          "name": "Upload untranslated strings",
+          "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+          "with": {
+            "name": "untranslated-strings",
+            "path": "./untranslated_strings.html"
+          }
+        }
+      ]
+    }
+  },
+  "on": {
+    "workflow_dispatch": {
+      "inputs": {
+        "contributionSha": {
+          "type": "string",
+          "required": true
+        },
+        "targetSha": {
+          "type": "string",
+          "required": true
+        },
+        "prNumber": {
+          "type": "string",
+          "required": true
+        }
+      }
+    }
+  }
+}
