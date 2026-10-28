@@ -1,7 +1,7 @@
 name: .NET
 jobs:
   dotnet-build:
-    if: ${{ !inputs.coverageOnly && !inputs.coverageCommandOnly }}
+    if: ${{ !inputs.smokeOnly && (!inputs.coverageOnly && !inputs.coverageCommandOnly) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,7 +36,8 @@ jobs:
     - name: Build
       run: dotnet build kiota.slnx --no-restore
     - name: Test
-      run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --coverlet-include '[Kiota.Builder]*' --coverlet-include '[kiota]*' --coverlet-exclude '[*.Tests]*' --report-gh
+      run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --coverlet-include
+        '[Kiota.Builder]*' --coverlet-include '[kiota]*' --coverlet-exclude '[*.Tests]*' --report-gh
     - name: Install report generator
       run: dotnet tool install --global dotnet-reportgenerator-globaltool
     - name: Generate coverage report
@@ -45,8 +46,8 @@ jobs:
       run: cat ./reports/coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
     - name: Upload coverage report
       uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52
-      if: github.event_name != 'merge_group' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor
-        != 'dependabot[bot]') || (github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch))
+      if: github.event_name != 'merge_group' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        && github.actor != 'dependabot[bot]') || (github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch))
       with:
         file: ./reports/coverage/Cobertura.xml
         language: CSharp
@@ -56,7 +57,7 @@ jobs:
         name: coverage
         path: reports/coverage
   test-release:
-    if: ${{ !inputs.coverageOnly && !inputs.coverageCommandOnly }}
+    if: ${{ !inputs.smokeOnly && (!inputs.coverageOnly && !inputs.coverageCommandOnly) }}
     strategy:
       fail-fast: false
       matrix:
@@ -104,8 +105,8 @@ jobs:
         '
     - name: Check the built in default settings
       if: runner.os != 'Windows'
-      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]]; then\n  echo \"Built in defaults are working\"\
-        \nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os }}/kiota info -l Java\n  exit 1\nfi\n"
+      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]]; then\n  echo \"Built in defaults\
+        \ are working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os }}/kiota info -l Java\n  exit 1\nfi\n"
     - name: Isolate the binary
       if: runner.os == 'Windows'
       run: 'mkdir ./${{ matrix.os }}-standalone
@@ -116,8 +117,8 @@ jobs:
     - name: Check the built in default settings
       if: runner.os == 'Windows'
       shell: bash
-      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota.exe info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]]; then\n  echo \"Built in defaults are\
-        \ working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os }}/kiota info -l Java\n  exit 1\nfi\n"
+      run: "INFO_RESULT=$(./${{ matrix.os }}-standalone/kiota.exe info -l Java)\nif [[ $INFO_RESULT == *\"maturity level\"* ]]; then\n  echo \"Built in\
+        \ defaults are working\"\nelse\n  echo \"Built in defaults NOT working\"\n  ./${{ matrix.os }}/kiota info -l Java\n  exit 1\nfi\n"
   dart-import-regression:
     runs-on: ubuntu-latest
     steps:
@@ -145,17 +146,17 @@ jobs:
         sdk: stable
     - name: Generate baseline and patch clients
       shell: bash
-      run: "set -euo pipefail\ntest \"$(git -C harness rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(git -C baseline rev-parse HEAD)\" = \"${{ inputs.targetSha }}\"\
-        \ndotnet build src/kiota/kiota.csproj -f net10.0\ndotnet build baseline/src/kiota/kiota.csproj -f net10.0\nfor output in baseline-client patch-client; do\n\
-        \  mkdir -p \"$output/lib\"\n  cp it/dart/pubspec.yaml it/dart/analysis_options.yaml \"$output/\"\ndone\ndotnet baseline/src/kiota/bin/Debug/net10.0/kiota.dll\
-        \ generate -l Dart -d harness/.preflight/dart-inline-items.json -o baseline-client/lib --co --ebc\ndotnet src/kiota/bin/Debug/net10.0/kiota.dll generate -l\
-        \ Dart -d harness/.preflight/dart-inline-items.json -o patch-client/lib --co --ebc\n"
+      run: "set -euo pipefail\ntest \"$(git -C harness rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(git -C baseline rev-parse HEAD)\" = \"${{ inputs.targetSha\
+        \ }}\"\ndotnet build src/kiota/kiota.csproj -f net10.0\ndotnet build baseline/src/kiota/kiota.csproj -f net10.0\nfor output in baseline-client patch-client;\
+        \ do\n  mkdir -p \"$output/lib\"\n  cp it/dart/pubspec.yaml it/dart/analysis_options.yaml \"$output/\"\ndone\ndotnet baseline/src/kiota/bin/Debug/net10.0/kiota.dll\
+        \ generate -l Dart -d harness/.preflight/dart-inline-items.json -o baseline-client/lib --co --ebc\ndotnet src/kiota/bin/Debug/net10.0/kiota.dll\
+        \ generate -l Dart -d harness/.preflight/dart-inline-items.json -o patch-client/lib --co --ebc\n"
     - name: Verify baseline compiler failure and patch compiler success
       shell: bash
       run: "set -euo pipefail\ndart --version\ncd baseline-client\ndart pub get\nif dart analyze lib/ > ../baseline-analyze.log 2>&1; then\n  cat ../baseline-analyze.log\n\
         \  echo 'Expected the baseline missing import to fail analysis'\n  exit 1\nfi\ncat ../baseline-analyze.log\ngrep -F 'uri_does_not_exist' ../baseline-analyze.log\n\
-        cd ../patch-client\ncp ../baseline-client/pubspec.lock .\ndart pub get --enforce-lockfile\ndart analyze lib/\ncd ..\ndiff -ru baseline-client/lib patch-client/lib\
-        \ > source.diff || test \"$?\" = 1\ncat source.diff\n"
+        cd ../patch-client\ncp ../baseline-client/pubspec.lock .\ndart pub get --enforce-lockfile\ndart analyze lib/\ncd ..\ndiff -ru baseline-client/lib\
+        \ patch-client/lib > source.diff || test \"$?\" = 1\ncat source.diff\n"
     - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       if: always()
       with:
@@ -167,7 +168,7 @@ jobs:
           patch-client/pubspec.lock
 
           '
-    if: ${{ !inputs.coverageOnly && !inputs.coverageCommandOnly && (inputs.prNumber == '8346') }}
+    if: ${{ !inputs.smokeOnly && (!inputs.coverageOnly && !inputs.coverageCommandOnly && (inputs.prNumber == '8346')) }}
   model-factory-regression:
     runs-on: ${{ matrix.os }}
     permissions:
@@ -205,11 +206,12 @@ jobs:
         go-version: stable
     - name: Prove baseline regression and patch success
       shell: bash
-      run: "set -euo pipefail\ntest \"$(git -C harness rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(git -C baseline rev-parse HEAD)\" = \"${{ inputs.targetSha }}\"\
-        \ncp tests/Kiota.Builder.Tests/KiotaBuilderTests.ModelFactory.cs baseline/tests/Kiota.Builder.Tests/\nif dotnet test baseline/tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj\
-        \ -- --filter-method '*CreatesBackwardCompatibleFactoryWhileSharedModelPropertiesAreBuildingAsync*' > baseline-regression.log 2>&1; then\n  cat baseline-regression.log\n\
-        \  echo 'Expected missing factory regression to fail'\n  exit 1\nfi\ncat baseline-regression.log\ngrep -F 'Sequence contains no matching element' baseline-regression.log\n\
-        grep -E 'failed: +2' baseline-regression.log\ndotnet test tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj -- --filter-method '*CreatesBackwardCompatibleFactoryWhileSharedModelPropertiesAreBuildingAsync*'\n"
+      run: "set -euo pipefail\ntest \"$(git -C harness rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(git -C baseline rev-parse HEAD)\" = \"${{ inputs.targetSha\
+        \ }}\"\ncp tests/Kiota.Builder.Tests/KiotaBuilderTests.ModelFactory.cs baseline/tests/Kiota.Builder.Tests/\nif dotnet test baseline/tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj\
+        \ -- --filter-method '*CreatesBackwardCompatibleFactoryWhileSharedModelPropertiesAreBuildingAsync*' > baseline-regression.log 2>&1; then\n  cat\
+        \ baseline-regression.log\n  echo 'Expected missing factory regression to fail'\n  exit 1\nfi\ncat baseline-regression.log\ngrep -F 'Sequence contains\
+        \ no matching element' baseline-regression.log\ngrep -E 'failed: +2' baseline-regression.log\ndotnet test tests/Kiota.Builder.Tests/Kiota.Builder.Tests.csproj\
+        \ -- --filter-method '*CreatesBackwardCompatibleFactoryWhileSharedModelPropertiesAreBuildingAsync*'\n"
     - name: Generate shared response stress fixtures
       shell: bash
       run: "set -euo pipefail\ndotnet build src/kiota/kiota.csproj -f net10.0\nfor language in CSharp Go; do\n  for _ in 1 2 3 4 5; do\n    dotnet src/kiota/bin/Debug/net10.0/kiota.dll\
@@ -219,9 +221,9 @@ jobs:
       with:
         name: race-regression-${{ matrix.os }}
         path: baseline-regression.log
-    if: ${{ !inputs.coverageOnly && !inputs.coverageCommandOnly && (inputs.prNumber == '8347') }}
+    if: ${{ !inputs.smokeOnly && (!inputs.coverageOnly && !inputs.coverageCommandOnly && (inputs.prNumber == '8347')) }}
   vscode-test_and_generate_binaries:
-    if: ${{ !inputs.coverageOnly && !inputs.coverageCommandOnly }}
+    if: ${{ !inputs.smokeOnly && (!inputs.coverageOnly && !inputs.coverageCommandOnly) }}
     strategy:
       fail-fast: false
       matrix:
@@ -260,8 +262,8 @@ jobs:
       with:
         global-json-file: global.json
     - id: last_release
-      run: '$releaseVersion = gh release list --repo microsoft/kiota --exclude-drafts --exclude-pre-releases --json tagName,isLatest | ConvertFrom-Json | ? {$_.isLatest
-        -eq $true} | select -first 1 -ExpandProperty tagName
+      run: '$releaseVersion = gh release list --repo microsoft/kiota --exclude-drafts --exclude-pre-releases --json tagName,isLatest | ConvertFrom-Json
+        | ? {$_.isLatest -eq $true} | select -first 1 -ExpandProperty tagName
 
         $releaseVersion = "$releaseVersion" -replace ''^v'', ''''
 
@@ -278,8 +280,8 @@ jobs:
       run: npm ci
       working-directory: vscode
     - name: Publish kiota for testing - ${{ matrix.binaries.os }} - ${{ matrix.binaries.architecture }}
-      run: 'dotnet publish src/kiota/kiota.csproj -c Release --runtime ${{ matrix.binaries.architecture }} -p:PublishSingleFile=true --self-contained --output vscode/packages/npm-package/.kiotabin/${{
-        steps.last_release.outputs.RELEASE_VERSION }}/${{ matrix.binaries.architecture }} -f net10.0
+      run: 'dotnet publish src/kiota/kiota.csproj -c Release --runtime ${{ matrix.binaries.architecture }} -p:PublishSingleFile=true --self-contained --output
+        vscode/packages/npm-package/.kiotabin/${{ steps.last_release.outputs.RELEASE_VERSION }}/${{ matrix.binaries.architecture }} -f net10.0
 
         '
       shell: pwsh
@@ -289,38 +291,18 @@ jobs:
     - name: Run tests - package
       shell: bash
       working-directory: vscode
-      run: |
-        set -euo pipefail
-        runtime="${{ steps.last_release.outputs.RELEASE_VERSION }}"
-        arch="${{ matrix.binaries.architecture }}"
-        mkdir -p "packages/npm-package/lib/.kiotabin/$runtime/$arch"
-        cp -R "packages/npm-package/.kiotabin/$runtime/$arch/." "packages/npm-package/lib/.kiotabin/$runtime/$arch/"
-        if [[ "${{ runner.os }}" == "Linux" ]]; then
-          xvfb-run -a npm run test:package:coverage
-        else
-          npm run test:package:coverage
-        fi
+      run: "set -euo pipefail\nruntime=\"${{ steps.last_release.outputs.RELEASE_VERSION }}\"\narch=\"${{ matrix.binaries.architecture }}\"\nmkdir -p \"\
+        packages/npm-package/lib/.kiotabin/$runtime/$arch\"\ncp -R \"packages/npm-package/.kiotabin/$runtime/$arch/.\" \"packages/npm-package/lib/.kiotabin/$runtime/$arch/\"\
+        \nif [[ \"${{ runner.os }}\" == \"Linux\" ]]; then\n  xvfb-run -a npm run test:package:coverage\nelse\n  npm run test:package:coverage\nfi\n"
     - name: Run tests - vscode
       shell: bash
       working-directory: vscode
-      run: |
-        set -euo pipefail
-        npm run build
-        npm run pretest --workspace=kiota
-        node - <<'JS'
-        const fs = require('fs');
-        const config = `import original from './.vscode-test.mjs';
-        import os from 'node:os';
-        import path from 'node:path';
-        export default {...original, tests: original.tests.map(test => ({...test, launchArgs: ['--user-data-dir=' + path.join(os.tmpdir(), 'kiota-preflight-user'), '--extensions-dir=' + path.join(os.tmpdir(), 'kiota-preflight-ext')]}))};`;
-        fs.writeFileSync('packages/microsoft-kiota/.vscode-test.preflight.mjs', config);
-        JS
-        if [[ "${{ runner.os }}" == "Linux" ]]; then
-          xvfb-run -a npx vscode-test --config packages/microsoft-kiota/.vscode-test.preflight.mjs --coverage | tee vscode-tests.log
-        else
-          npx vscode-test --config packages/microsoft-kiota/.vscode-test.preflight.mjs --coverage | tee vscode-tests.log
-        fi
-        grep -E '[1-9][0-9]* passing' vscode-tests.log
+      run: "set -euo pipefail\nnpm run build\nnpm run pretest --workspace=kiota\nnode - <<'JS'\nconst fs = require('fs');\nconst config = `import original\
+        \ from './.vscode-test.mjs';\nimport os from 'node:os';\nimport path from 'node:path';\nexport default {...original, tests: original.tests.map(test\
+        \ => ({...test, launchArgs: ['--user-data-dir=' + path.join(os.tmpdir(), 'kiota-preflight-user'), '--extensions-dir=' + path.join(os.tmpdir(), 'kiota-preflight-ext')]}))};`;\n\
+        fs.writeFileSync('packages/microsoft-kiota/.vscode-test.preflight.mjs', config);\nJS\nif [[ \"${{ runner.os }}\" == \"Linux\" ]]; then\n  xvfb-run\
+        \ -a npx vscode-test --config packages/microsoft-kiota/.vscode-test.preflight.mjs --coverage | tee vscode-tests.log\nelse\n  npx vscode-test --config\
+        \ packages/microsoft-kiota/.vscode-test.preflight.mjs --coverage | tee vscode-tests.log\nfi\ngrep -E '[1-9][0-9]* passing' vscode-tests.log\n"
     - name: Upload artifact
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       with:
@@ -328,7 +310,7 @@ jobs:
         path: vscode/packages/npm-package/.kiotabin/${{ steps.last_release.outputs.RELEASE_VERSION }}/${{ matrix.binaries.architecture }}
         retention-days: 3
   vscode-build:
-    if: ${{ !inputs.coverageOnly && !inputs.coverageCommandOnly }}
+    if: ${{ !inputs.smokeOnly && (!inputs.coverageOnly && !inputs.coverageCommandOnly) }}
     needs:
     - vscode-test_and_generate_binaries
     runs-on: ubuntu-latest
@@ -362,8 +344,8 @@ jobs:
       with:
         node-version: 24.x
     - id: last_release
-      run: '$releaseVersion = gh release list --repo microsoft/kiota --exclude-drafts --exclude-pre-releases --json tagName,isLatest | ConvertFrom-Json | ? {$_.isLatest
-        -eq $true} | select -first 1 -ExpandProperty tagName
+      run: '$releaseVersion = gh release list --repo microsoft/kiota --exclude-drafts --exclude-pre-releases --json tagName,isLatest | ConvertFrom-Json
+        | ? {$_.isLatest -eq $true} | select -first 1 -ExpandProperty tagName
 
         Write-Output "RELEASE_VERSION=$releaseVersion" >> $Env:GITHUB_OUTPUT
 
@@ -406,7 +388,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
     - vscode-build
-    if: ${{ !inputs.coverageOnly && !inputs.coverageCommandOnly && (always()) }}
+    if: ${{ !inputs.smokeOnly && (!inputs.coverageOnly && !inputs.coverageCommandOnly && (always())) }}
     steps:
     - name: All build matrix options are successful
       if: ${{ !(contains(needs.*.result, 'failure')) }}
@@ -415,185 +397,211 @@ jobs:
       if: ${{ contains(needs.*.result, 'failure') }}
       run: exit 1
   generated-php:
-    if: ${{ !inputs.coverageOnly && !inputs.coverageCommandOnly && inputs.prNumber == '8367' }}
+    if: ${{ !inputs.smokeOnly && (!inputs.coverageOnly && !inputs.coverageCommandOnly && inputs.prNumber == '8367') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: harness
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ inputs.contributionSha }}
-          fetch-depth: 0
-          path: contribution
-          persist-credentials: false
-      - name: Verify exact contribution and target
-        working-directory: contribution
-        run: |
-          test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
-          git merge-base --is-ancestor ${{ inputs.targetSha }} HEAD
-          git rev-parse HEAD
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          global-json-file: contribution/global.json
-      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
-        with:
-          php-version: '8.2'
-          coverage: none
-      - name: Build generator
-        working-directory: contribution
-        run: dotnet build src/kiota/kiota.csproj -c Release -f net10.0
-      - name: Generate PHP with deprecated elements
-        working-directory: contribution
-        run: dotnet src/kiota/bin/Release/net10.0/kiota.dll generate -l PHP -d ../harness/.github/kiota-preflight/php-deprecation.json -o generated --co --ebc
-      - name: Validate generated PHP syntax and metadata
-        working-directory: contribution
-        run: |
-          php --version
-          find generated -name '*.php' -print0 | xargs -0 -n 1 php -l
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          def documented(path, declaration):
-              text = Path(path).read_text()
-              assert re.search(r'/\*\*[^*]*(?:\*(?!/)[^*]*)*@deprecated[^*]*(?:\*(?!/)[^*]*)*\*/\s*' + declaration, text), (path, declaration)
-          documented('generated/Models/Legacy.php', r'class Legacy\b')
-          documented('generated/Models/LegacyStatus.php', r'class LegacyStatus\b')
-          documented('generated/Models/Legacy.php', r'public function getName\(')
-          documented('generated/Models/Legacy.php', r'public function setName\(')
-          documented('generated/Legacy/LegacyRequestBuilder.php', r'public function get\(')
-          documented('generated/Legacy/LegacyRequestBuilder.php', r'public function toGetRequestInformation\(')
-          print('Generated model, enum, accessors and operation expose PHPDoc deprecation metadata.')
-          PY
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        path: harness
+        persist-credentials: false
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.contributionSha }}
+        fetch-depth: 0
+        path: contribution
+        persist-credentials: false
+    - name: Verify exact contribution and target
+      working-directory: contribution
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
+
+        git merge-base --is-ancestor ${{ inputs.targetSha }} HEAD
+
+        git rev-parse HEAD
+
+        '
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: contribution/global.json
+    - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+      with:
+        php-version: '8.2'
+        coverage: none
+    - name: Build generator
+      working-directory: contribution
+      run: dotnet build src/kiota/kiota.csproj -c Release -f net10.0
+    - name: Generate PHP with deprecated elements
+      working-directory: contribution
+      run: dotnet src/kiota/bin/Release/net10.0/kiota.dll generate -l PHP -d ../harness/.github/kiota-preflight/php-deprecation.json -o generated --co --ebc
+    - name: Validate generated PHP syntax and metadata
+      working-directory: contribution
+      run: "php --version\nfind generated -name '*.php' -print0 | xargs -0 -n 1 php -l\npython3 - <<'PY'\nfrom pathlib import Path\nimport re\ndef documented(path,\
+        \ declaration):\n    text = Path(path).read_text()\n    assert re.search(r'/\\*\\*[^*]*(?:\\*(?!/)[^*]*)*@deprecated[^*]*(?:\\*(?!/)[^*]*)*\\*/\\\
+        s*' + declaration, text), (path, declaration)\ndocumented('generated/Models/Legacy.php', r'class Legacy\\b')\ndocumented('generated/Models/LegacyStatus.php',\
+        \ r'class LegacyStatus\\b')\ndocumented('generated/Models/Legacy.php', r'public function getName\\(')\ndocumented('generated/Models/Legacy.php',\
+        \ r'public function setName\\(')\ndocumented('generated/Legacy/LegacyRequestBuilder.php', r'public function get\\(')\ndocumented('generated/Legacy/LegacyRequestBuilder.php',\
+        \ r'public function toGetRequestInformation\\(')\nprint('Generated model, enum, accessors and operation expose PHPDoc deprecation metadata.')\n\
+        PY\n"
   explicit-coverage:
-    if: ${{ inputs.coverageOnly }}
+    if: ${{ !inputs.smokeOnly && (inputs.coverageOnly) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - kind: contribution
-            sha: ${{ inputs.contributionSha }}
-          - kind: baseline
-            sha: ${{ inputs.targetSha }}
-          - kind: merge
-            sha: ${{ inputs.mergeSha }}
+        - kind: contribution
+          sha: ${{ inputs.contributionSha }}
+        - kind: baseline
+          sha: ${{ inputs.targetSha }}
+        - kind: merge
+          sha: ${{ inputs.mergeSha }}
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ matrix.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Verify tested commit
-        run: |
-          test "$(git rev-parse HEAD)" = "${{ matrix.sha }}"
-          git rev-parse HEAD
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          global-json-file: global.json
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-        with:
-          go-version: stable
-      - name: Restore and build unchanged source
-        run: |
-          dotnet restore kiota.slnx
-          dotnet build kiota.slnx --no-restore
-      - name: Run full suite with explicit production assembly coverage
-        run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --coverlet-include '[Kiota.Builder]*' --coverlet-include '[kiota]*' --coverlet-exclude '[*.Tests]*'
-      - name: Reject empty coverage and verify changed helper is exercised
-        env:
-          TEST_KIND: ${{ matrix.kind }}
-        run: |
-          python3 - <<'PYTHON'
-          from pathlib import Path
-          import os, xml.etree.ElementTree as E
-          reports=list(Path('TestResults').rglob('coverage.cobertura.*.xml'))
-          assert len(reports)==3, reports
-          helper=[]
-          for report in reports:
-              root=E.parse(report).getroot()
-              assert int(root.get('lines-valid','0'))>0, report
-              assert int(root.get('lines-covered','0'))>0, report
-              print(report, root.attrib)
-              for cls in root.findall('.//class'):
-                  if cls.get('name')=='Kiota.Builder.Writers.Php.PhpConventionService':
-                      helper.extend(m for m in cls.findall('methods/method') if m.get('name')=='GetDeprecationDescription')
-          if os.environ['TEST_KIND']!='baseline':
-              assert helper and any(float(m.get('line-rate','0'))==1 and float(m.get('branch-rate','0'))==1 for m in helper), [m.attrib for m in helper]
-              print('Deprecation helper has 100% line and branch coverage in the writer suite.')
-          PYTHON
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: explicit-coverage-${{ matrix.kind }}
-          path: TestResults/**/coverage.cobertura.*.xml
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ matrix.sha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify tested commit
+      run: 'test "$(git rev-parse HEAD)" = "${{ matrix.sha }}"
+
+        git rev-parse HEAD
+
+        '
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: global.json
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version: stable
+    - name: Restore and build unchanged source
+      run: 'dotnet restore kiota.slnx
+
+        dotnet build kiota.slnx --no-restore
+
+        '
+    - name: Run full suite with explicit production assembly coverage
+      run: dotnet test kiota.slnx --no-build --verbosity normal --results-directory=./TestResults --coverlet --coverlet-output-format cobertura --coverlet-include
+        '[Kiota.Builder]*' --coverlet-include '[kiota]*' --coverlet-exclude '[*.Tests]*'
+    - name: Reject empty coverage and verify changed helper is exercised
+      env:
+        TEST_KIND: ${{ matrix.kind }}
+      run: "python3 - <<'PYTHON'\nfrom pathlib import Path\nimport os, xml.etree.ElementTree as E\nreports=list(Path('TestResults').rglob('coverage.cobertura.*.xml'))\n\
+        assert len(reports)==3, reports\nhelper=[]\nfor report in reports:\n    root=E.parse(report).getroot()\n    assert int(root.get('lines-valid','0'))>0,\
+        \ report\n    assert int(root.get('lines-covered','0'))>0, report\n    print(report, root.attrib)\n    for cls in root.findall('.//class'):\n  \
+        \      if cls.get('name')=='Kiota.Builder.Writers.Php.PhpConventionService':\n            helper.extend(m for m in cls.findall('methods/method')\
+        \ if m.get('name')=='GetDeprecationDescription')\nif os.environ['TEST_KIND']!='baseline':\n    assert helper and any(float(m.get('line-rate','0'))==1\
+        \ and float(m.get('branch-rate','0'))==1 for m in helper), [m.attrib for m in helper]\n    print('Deprecation helper has 100% line and branch coverage\
+        \ in the writer suite.')\nPYTHON\n"
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: explicit-coverage-${{ matrix.kind }}
+        path: TestResults/**/coverage.cobertura.*.xml
   coverage-command-regression:
-    if: ${{ inputs.coverageCommandOnly }}
+    if: ${{ !inputs.smokeOnly && (inputs.coverageCommandOnly) }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - kind: baseline
-            os: ubuntu-latest
-            configuration: Debug
-            sha: ${{ inputs.targetSha }}
-          - kind: github
-            os: ubuntu-latest
-            configuration: Debug
-            sha: ${{ inputs.contributionSha }}
-          - kind: ado
-            os: windows-latest
-            configuration: Release
-            sha: ${{ inputs.contributionSha }}
+        - kind: baseline
+          os: ubuntu-latest
+          configuration: Debug
+          sha: ${{ inputs.targetSha }}
+        - kind: github
+          os: ubuntu-latest
+          configuration: Debug
+          sha: ${{ inputs.contributionSha }}
+        - kind: ado
+          os: windows-latest
+          configuration: Release
+          sha: ${{ inputs.contributionSha }}
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.sha }}
-          path: harness
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ matrix.sha }}
-          path: contribution
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          global-json-file: contribution/global.json
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-        with:
-          go-version: stable
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        with:
-          python-version: '3.13'
-      - name: Verify source and harness commits, restore, format and build
-        working-directory: contribution
-        shell: pwsh
-        run: |
-          if ((git rev-parse HEAD) -ne '${{ matrix.sha }}') { throw 'Wrong tested commit' }
-          if ((git -C ../harness rev-parse HEAD) -ne '${{ github.sha }}') { throw 'Wrong harness commit' }
-          git rev-parse HEAD
-          dotnet restore kiota.slnx
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet format --verify-no-changes --no-restore
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build kiota.slnx --no-restore --configuration ${{ matrix.configuration }}
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Execute actual pipeline test command and inspect coverage XML
-        working-directory: contribution
-        env:
-          TEST_KIND: ${{ matrix.kind }}
-          TEST_SHA: ${{ matrix.sha }}
-        run: python ../harness/.github/kiota-preflight/coverage-command.py
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: coverage-command-${{ matrix.kind }}
-          path: contribution/TestResults/**/coverage.cobertura.*.xml
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.sha }}
+        path: harness
+        persist-credentials: false
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ matrix.sha }}
+        path: contribution
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: contribution/global.json
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+      with:
+        go-version: stable
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: '3.13'
+    - name: Verify source and harness commits, restore, format and build
+      working-directory: contribution
+      shell: pwsh
+      run: 'if ((git rev-parse HEAD) -ne ''${{ matrix.sha }}'') { throw ''Wrong tested commit'' }
+
+        if ((git -C ../harness rev-parse HEAD) -ne ''${{ github.sha }}'') { throw ''Wrong harness commit'' }
+
+        git rev-parse HEAD
+
+        dotnet restore kiota.slnx
+
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        dotnet format --verify-no-changes --no-restore
+
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        dotnet build kiota.slnx --no-restore --configuration ${{ matrix.configuration }}
+
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        '
+    - name: Execute actual pipeline test command and inspect coverage XML
+      working-directory: contribution
+      env:
+        TEST_KIND: ${{ matrix.kind }}
+        TEST_SHA: ${{ matrix.sha }}
+      run: python ../harness/.github/kiota-preflight/coverage-command.py
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: coverage-command-${{ matrix.kind }}
+        path: contribution/TestResults/**/coverage.cobertura.*.xml
+  generated-client-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        path: harness
+        persist-credentials: false
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.contributionSha }}
+        path: contribution
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Verify source and target SHA
+      working-directory: contribution
+      run: 'test "$(git rev-parse HEAD)" = "${{ inputs.contributionSha }}"
+
+        git merge-base --is-ancestor "${{ inputs.targetSha }}" HEAD
+
+        git rev-parse HEAD
+
+        '
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: contribution/global.json
+    - name: Build generator
+      working-directory: contribution
+      run: dotnet build src/kiota/kiota.csproj -f net10.0
+    - name: Compile and exercise generated clients in all three modes
+      run: python3 harness/.github/kiota-preflight/csharp-smoke.py contribution/src/kiota/bin/Debug/net10.0/kiota.dll harness/.github/kiota-preflight/readonly.json
+    if: ${{ inputs.smokeOnly }}
 'on':
   workflow_dispatch:
     inputs:
@@ -621,4 +629,7 @@ jobs:
         description: Contribution PR
         required: true
         type: string
+      smokeOnly:
+        type: boolean
+        default: false
 run-name: PR ${{ inputs.prNumber }} conflict validation - .NET
