@@ -32,6 +32,7 @@ jobs:
       with:
         name: generator
         path: publish
+    if: ${{ !inputs.baselineOnly }}
   download-openapi-specs:
     runs-on: ubuntu-latest
     needs: build
@@ -84,6 +85,7 @@ jobs:
           it/openapi.json
 
           '
+    if: ${{ !inputs.baselineOnly }}
   idempotency:
     runs-on: ubuntu-latest
     needs: download-openapi-specs
@@ -152,14 +154,15 @@ jobs:
       shell: pwsh
     - name: Verify idempotency
       shell: pwsh
-      run: ./it/compare-generation.ps1 -descriptionUrl "${{ steps.replace_url.outputs.DESCRIPTION_PATH }}" -descriptionKey ${{ matrix.description }}  -language "${{
-        matrix.language }}"
+      run: ./it/compare-generation.ps1 -descriptionUrl "${{ steps.replace_url.outputs.DESCRIPTION_PATH }}" -descriptionKey ${{ matrix.description }}  -language
+        "${{ matrix.language }}"
       continue-on-error: ${{ steps.check-suppressed.outputs.IS_SUPPRESSED == 'true' }}
     - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       if: always()
       with:
         name: idempotency-${{ matrix.language }}-${{ steps.replace_url.outputs.ARTKEY }}
         path: idempotency-results/*.zip
+    if: ${{ !inputs.baselineOnly }}
   cleanup:
     runs-on: ubuntu-latest
     needs: idempotency
@@ -168,10 +171,11 @@ jobs:
       with:
         artifact_name: generator
         min_bytes: '0'
+    if: ${{ !inputs.baselineOnly }}
   check-idempotency-tests:
     runs-on: ubuntu-latest
     needs: idempotency
-    if: always()
+    if: ${{ !inputs.baselineOnly && (always()) }}
     steps:
     - name: All build matrix options are successful
       if: ${{ !(contains(needs.*.result, 'failure')) }}
@@ -179,6 +183,101 @@ jobs:
     - name: One or more build matrix options failed
       if: ${{ contains(needs.*.result, 'failure') }}
       run: exit 1
+  baseline-build:
+    if: ${{ inputs.baselineOnly }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - &id001
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ inputs.targetSha }}
+        persist-credentials: false
+    - &id002
+      name: Verify untouched target SHA
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.targetSha }}
+      run: 'set -euo pipefail
+
+        [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+        test "$(git rev-parse HEAD)" = "$BASE_SHA"
+
+        git rev-parse HEAD'
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      with:
+        global-json-file: global.json
+    - name: Publish untouched baseline
+      run: dotnet publish ./src/kiota/kiota.csproj -c Release -p:PublishSingleFile=true -p:PublishReadyToRun=true -o ./publish -f net10.0
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: baseline-generator
+        path: publish
+  baseline-suppression-probe:
+    if: ${{ inputs.baselineOnly }}
+    needs: baseline-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - language: java
+          description: https://api.twitter.com/2/openapi.json
+        - language: csharp
+          description: https://api.twitter.com/2/openapi.json
+        - language: go
+          description: https://api.twitter.com/2/openapi.json
+        - language: typescript
+          description: https://api.twitter.com/2/openapi.json
+        - language: ruby
+          description: https://api.twitter.com/2/openapi.json
+        - language: php
+          description: https://api.twitter.com/2/openapi.json
+        - language: python
+          description: https://api.twitter.com/2/openapi.json
+        - language: dart
+          description: https://api.twitter.com/2/openapi.json
+        - language: java
+          description: https://raw.githubusercontent.com/stripe/openapi/refs/heads/master/latest/openapi.spec3.json
+        - language: typescript
+          description: https://developers.notion.com/openapi.json
+    steps:
+    - *id001
+    - *id002
+    - id: key
+      shell: pwsh
+      env:
+        DESCRIPTION: ${{ matrix.description }}
+      run: ./it/get-description-artifact-key.ps1 -descriptionUrl $Env:DESCRIPTION
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      with:
+        name: description-${{ steps.key.outputs.ARTKEY }}
+        path: description
+        run-id: ${{ inputs.fixtureRun }}
+        github-token: ${{ github.token }}
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+      with:
+        name: baseline-generator
+        path: publish
+    - name: Make baseline executable
+      run: chmod a+x publish/kiota
+    - name: Run original idempotency command without suppression
+      shell: pwsh
+      env:
+        DESCRIPTION: ${{ matrix.description }}
+        LANGUAGE: ${{ matrix.language }}
+        DESCRIPTION_PATH: ${{ steps.key.outputs.DESCRIPTION_PATH }}
+      run: ./it/compare-generation.ps1 -descriptionUrl $Env:DESCRIPTION_PATH -descriptionKey $Env:DESCRIPTION -language $Env:LANGUAGE
+    - if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: baseline-idempotency-${{ matrix.language }}-${{ steps.key.outputs.ARTKEY }}
+        path: idempotency-results/*.zip
 'on':
   workflow_dispatch:
     inputs:
@@ -194,4 +293,10 @@ jobs:
         description: Contribution PR
         required: true
         type: string
-run-name: PR ${{ inputs.prNumber }} conflict validation - idempotency-tests
+      baselineOnly:
+        type: boolean
+        default: false
+      fixtureRun:
+        type: string
+        required: false
+run-name: ${{ inputs.baselineOnly && 'Baseline suppression probes' || format('PR {0} conflict validation - idempotency-tests', inputs.prNumber) }}
