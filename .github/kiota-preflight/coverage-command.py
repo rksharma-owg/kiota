@@ -23,11 +23,7 @@ assert len(reports)==3,reports
 roots=[E.parse(p).getroot() for p in reports]
 for p,r in zip(reports,roots): print(p.name,r.attrib,flush=True)
 packages=[p for r in roots for p in r.findall('packages/package')]
-if kind=='baseline':
-    assert not packages and sum(int(r.get('lines-valid','0')) for r in roots)==0,[p.attrib for p in packages]
-    print('REPRODUCED: baseline reports zero production assemblies despite passing tests.',flush=True)
-else:
-    assert all(int(r.get('lines-valid','0'))>0 and int(r.get('lines-covered','0'))>0 for r in roots),[r.attrib for r in roots]
-    names={p.get('name') for p in packages}
-    assert {'Kiota.Builder','kiota'}<=names,names
-    print('VERIFIED: unchanged tests collect non-empty Kiota.Builder and CLI coverage.',flush=True)
+assert all(int(r.get('lines-valid','0'))>0 and int(r.get('lines-covered','0'))>0 for r in roots),[r.attrib for r in roots]
+names={p.get('name') for p in packages}
+assert {'Kiota.Builder','kiota'}<=names,names
+print('VERIFIED: actual pipeline tests collect non-empty Kiota.Builder and CLI coverage on '+kind,flush=True)
